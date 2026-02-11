@@ -105,12 +105,12 @@ const Story = () => {
         <Paragraph>
           Solana's speed and cost structure are ideal for a protocol that needs to execute
           frequent, automated on-chain actions. Sub-second finality, negligible transaction
-          fees, and a mature DEX ecosystem (Meteora, Jupiter, Raydium) mean the burn bot can
+          fees, and a mature DEX ecosystem (Raydium, Jupiter, Meteora) mean the autonomous engine can
           operate efficiently without friction.
         </Paragraph>
         <Paragraph>
-          Meteora's DLMM — with its dynamic fees, single-sided deposit support, and discrete
-          price bins — is the perfect infrastructure for VOID's concentrated liquidity strategy.
+          Raydium's CLMM — with its high fee tiers, single-sided deposit support, and tick-based
+          concentrated liquidity — is the perfect infrastructure for VOID's liquidity strategy.
         </Paragraph>
       </Section>
 
