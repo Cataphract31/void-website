@@ -36,7 +36,7 @@ const Footer = () => {
   return (
     <FooterWrapper>
       <SocialLinks>
-        <SocialLink href="https://twitter.com/VoidOnSolana" target="_blank" rel="noopener noreferrer">
+        <SocialLink href="https://x.com/VOIDINSOL" target="_blank" rel="noopener noreferrer">
           Twitter
         </SocialLink>
         <SocialLink href="https://t.me/voidonsolana" target="_blank" rel="noopener noreferrer">
