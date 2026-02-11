@@ -45,10 +45,10 @@ const Footer = () => {
         <SocialLink href="https://t.me/voidsolportal" target="_blank" rel="noopener noreferrer">
           Telegram
         </SocialLink>
-        <SocialLink href="https://dexscreener.com/solana" target="_blank" rel="noopener noreferrer">
+        <SocialLink href="https://dexscreener.com/solana/nkr7dkAuSPG2w8jksVeHTZmHRY8CMr6r1ekBG9eaPHb" target="_blank" rel="noopener noreferrer">
           DexScreener
         </SocialLink>
-        <SocialLink href="https://birdeye.so" target="_blank" rel="noopener noreferrer">
+        <SocialLink href="https://birdeye.so/token/nkr7dkAuSPG2w8jksVeHTZmHRY8CMr6r1ekBG9eaPHb?chain=solana" target="_blank" rel="noopener noreferrer">
           Birdeye
         </SocialLink>
       </SocialLinks>
