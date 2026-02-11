@@ -108,7 +108,7 @@ const CopyButton = styled.button`
 `;
 
 // Placeholder — fill in after token creation
-const VOID_MINT = 'VOID_MINT_ADDRESS_HERE';
+const VOID_MINT = 'nkr7dkAuSPG2w8jksVeHTZmHRY8CMr6r1ekBG9eaPHb';
 
 const ContractInfo = () => {
   const [copied, setCopied] = useState(false);

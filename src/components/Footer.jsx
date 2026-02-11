@@ -39,7 +39,10 @@ const Footer = () => {
         <SocialLink href="https://x.com/VOIDINSOL" target="_blank" rel="noopener noreferrer">
           Twitter
         </SocialLink>
-        <SocialLink href="https://t.me/voidonsolana" target="_blank" rel="noopener noreferrer">
+        <SocialLink href="https://x.com/i/communities/2021674294166925617" target="_blank" rel="noopener noreferrer">
+          Community
+        </SocialLink>
+        <SocialLink href="https://t.me/voidsolportal" target="_blank" rel="noopener noreferrer">
           Telegram
         </SocialLink>
         <SocialLink href="https://dexscreener.com/solana" target="_blank" rel="noopener noreferrer">
