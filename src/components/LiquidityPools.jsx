@@ -100,9 +100,9 @@ const PoolTag = styled.div`
 
 const LiquidityPools = () => {
   const pools = [
-    { name: 'VOID / SOL', tag: 'Main Pool', url: 'https://dexscreener.com/solana', active: true },
-    { name: 'VOID / WHITEWHALE', tag: 'Upcoming', url: '#', active: false },
-    { name: 'VOID / PENGUIN', tag: 'Upcoming', url: '#', active: false },
+    { name: 'VOID / SOL', tag: 'Raydium CLMM', url: 'https://dexscreener.com/solana/nkr7dkAuSPG2w8jksVeHTZmHRY8CMr6r1ekBG9eaPHb', active: true },
+    { name: 'VOID / WHITEWHALE', tag: 'Meteora DLMM', url: 'https://www.meteora.ag/dlmm/6rE8Ej3aae9QBukLYWFvzDAYmRgsygpKK1LbqLjHJGcL', active: true },
+    { name: 'VOID / PENGUIN', tag: 'Meteora DLMM', url: 'https://www.meteora.ag/dlmm/5jW3M4defHZgCAt27FQU7upeELu5yWroiax9nmd2Bv62', active: true },
     { name: 'VOID / XXX', tag: 'Upcoming', url: '#', active: false },
   ];
 
