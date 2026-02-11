@@ -286,9 +286,14 @@ const Whitepaper = () => {
           Raydium's Concentrated Liquidity Market Maker was chosen as the primary DEX
           for the VOID/SOL pool:
         </Paragraph>
+        <Paragraph>
+          The VOID/SOL pool on Raydium Concentrated Liquidity (CLMM) is configured with a <strong>0.8% swap fee</strong>.
+          This high-fee structure is intentional. Unlike typical pools (0.3%), the 0.8% fee acts as a
+          perpetual engine fuel.
+        </Paragraph>
         <List>
           <ListItem>
-            <strong>High fee tiers</strong> — 1% base fee per swap maximizes protocol revenue, critical for funding the burn + ecosystem expansion flywheel
+            <strong>High fee tiers</strong> — 0.8% base fee per swap maximizes protocol revenue, critical for funding the burn + ecosystem expansion flywheel
           </ListItem>
           <ListItem>
             <strong>Concentrated liquidity</strong> — tick-based price ranges (Uniswap V3 model) for precise, capital-efficient liquidity placement
