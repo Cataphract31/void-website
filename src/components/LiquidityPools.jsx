@@ -120,7 +120,7 @@ const LiquidityPools = () => {
             href={pool.active ? pool.url : undefined}
             target={pool.active ? "_blank" : undefined}
             rel={pool.active ? "noopener noreferrer" : undefined}
-            as={pool.active ? 'a' : 'div'}
+            as={pool.active ? motion.a : motion.div}
             style={!pool.active ? { opacity: 0.4, cursor: 'default' } : {}}
             initial={{ opacity: 0, y: 15 }}
             whileInView={{ opacity: pool.active ? 1 : 0.4, y: 0 }}

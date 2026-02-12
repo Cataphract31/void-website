@@ -100,6 +100,7 @@ const Header = () => {
         <NavLink to="/story">Story</NavLink>
         <NavLink to="/whitepaper">Whitepaper</NavLink>
         <NavLink to="/universe">Universe</NavLink>
+        <NavLink to="/explorer">Explorer</NavLink>
       </Nav>
     </HeaderWrapper>
   );
