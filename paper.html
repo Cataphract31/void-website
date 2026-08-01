@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VOID — Technical Paper</title>
+<meta name="description" content="VOID technical paper: an immutable Solana program that burns its own sell-side liquidity on a fixed schedule. Supply only falls.">
+<meta name="theme-color" content="#04000d">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23050014'/%3E%3Ccircle cx='32' cy='32' r='17' fill='none' stroke='%23a78bfa' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='9' fill='%23000'/%3E%3C/svg%3E">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --vio:     #a78bfa;
+  --vio-dim: #6d4fc4;
+  --vio-deep:#2a1358;
+  --ember:   #ff8a3c;
+  --green:   #4ade80;
+  --ink:     #e2dcf7;
+  --dim:     #968dbf;
+  --faint:   #5a5183;
+  --line:    rgba(167,139,250,.16);
+  --card:    rgba(9, 2, 26, .62);
+  --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+  --disp: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+html { scroll-behavior: smooth; }
+body {
+  background: #04000d; color: var(--ink);
+  font-family: var(--disp); font-size: 16.5px; line-height: 1.7; font-weight: 300;
+  overflow-x: hidden;
+}
+::selection { background: var(--vio-deep); color: #fff; }
+
+/* The same universe as the fall, becalmed. Canvas behind, scrim above it. */
+#gl { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 0; }
+#scrim {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(4,0,13,.93) 0%, rgba(4,0,13,.82) 46%, rgba(4,0,13,.42) 100%),
+    radial-gradient(ellipse 120% 40% at 50% 108%, rgba(4,0,13,.9), transparent 60%);
+}
+@media (max-width: 960px) {
+  #scrim { background: rgba(4,0,13,.86); }
+}
+
+#hud {
+  position: fixed; top: 0; left: 0; z-index: 6; padding: 18px clamp(20px, 4vw, 56px);
+}
+#hud a {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .35em;
+  text-transform: uppercase; color: var(--dim); text-decoration: none;
+}
+#hud a:hover { color: var(--vio); }
+
+/* Layout ------------------------------------------------------------------ */
+.wrap {
+  position: relative; z-index: 2;
+  max-width: 1280px; margin: 0 auto;
+  padding: 0 clamp(20px, 4vw, 56px) 96px;
+  display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 72px;
+}
+@media (max-width: 960px) { .wrap { display: block; } }
+
+nav.toc {
+  position: sticky; top: 96px; align-self: start;
+  font-family: var(--mono); font-size: 11px; letter-spacing: .12em;
+  padding-top: 200px;
+}
+nav.toc a {
+  display: block; color: var(--faint); text-decoration: none;
+  padding: 7px 0 7px 14px; border-left: 1px solid var(--line);
+  transition: color .2s, border-color .2s;
+}
+nav.toc a:hover { color: var(--vio); border-left-color: var(--vio); }
+@media (max-width: 960px) { nav.toc { display: none; } }
+
+/* Header ------------------------------------------------------------------ */
+header { padding: 128px 0 24px; }
+header h1 {
+  font-size: clamp(56px, 7vw, 96px); font-weight: 900; letter-spacing: .26em;
+  color: #fff; text-shadow: 0 0 18px rgba(167,139,250,.7), 0 0 80px rgba(120,70,220,.4);
+}
+header .tag {
+  font-family: var(--mono); font-size: 12px; letter-spacing: .5em;
+  color: var(--dim); text-transform: uppercase; margin-top: 14px;
+}
+header .meta {
+  margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--line);
+  font-family: var(--mono); font-size: 11px; color: var(--faint);
+  letter-spacing: .15em; line-height: 2.2; max-width: 560px;
+}
+header .meta b { color: var(--dim); font-weight: 400; }
+
+/* Sections: one rhythm everywhere ----------------------------------------- */
+section { margin-top: 88px; }
+.shead { display: flex; align-items: center; gap: 18px; margin-bottom: 26px; }
+.shead .snum {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .4em;
+  color: var(--vio-dim);
+}
+.shead h2 { font-size: clamp(25px, 2.8vw, 33px); font-weight: 700; color: #fff; letter-spacing: .03em; white-space: nowrap; }
+.shead::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--line), transparent); }
+
+h3 {
+  font-family: var(--mono); font-size: 12px; letter-spacing: .3em;
+  text-transform: uppercase; color: var(--vio); font-weight: 400;
+  margin: 40px 0 14px;
+}
+p { margin-bottom: 16px; max-width: 74ch; }
+p b { font-weight: 600; color: #fff; }
+p i { color: var(--dim); }
+
+.pull {
+  border-left: 2px solid var(--vio); padding: 6px 0 6px 26px; margin: 30px 0;
+  font-size: clamp(18px, 2.2vw, 23px); font-weight: 300; color: #fff;
+  max-width: 34em; line-height: 1.65;
+  text-shadow: 0 0 30px rgba(120,70,220,.35);
+}
+
+ul { list-style: none; margin: 0 0 16px; }
+ul li { padding-left: 22px; position: relative; margin-bottom: 10px; max-width: 74ch; }
+ul li::before { content: "—"; position: absolute; left: 0; color: var(--vio-dim); }
+
+ol.steps { list-style: none; counter-reset: s; margin: 24px 0; }
+ol.steps li {
+  counter-increment: s; position: relative;
+  padding: 14px 0 14px 52px; max-width: 70ch;
+  border-top: 1px solid rgba(167,139,250,.08);
+}
+ol.steps li:last-child { border-bottom: 1px solid rgba(167,139,250,.08); }
+ol.steps li::before {
+  content: counter(s, decimal-leading-zero);
+  position: absolute; left: 0; top: 16px;
+  font-family: var(--mono); font-size: 12px; color: var(--vio); letter-spacing: .1em;
+}
+
+/* Tables -------------------------------------------------------------------- */
+.tblwrap { overflow-x: auto; margin: 22px 0; }
+table { border-collapse: collapse; font-family: var(--mono); font-size: 13px; width: 100%; max-width: 620px; }
+th {
+  text-align: left; font-weight: 400; color: var(--faint); text-transform: uppercase;
+  font-size: 10px; letter-spacing: .25em; padding: 10px 24px 10px 0;
+  border-bottom: 1px solid rgba(167,139,250,.3);
+}
+td { padding: 13px 24px 13px 0; border-bottom: 1px solid rgba(167,139,250,.09); color: var(--ink); }
+td.hot  { color: var(--vio); }
+td.fire { color: var(--ember); }
+
+/* Stat cards ------------------------------------------------------------------ */
+.stats { display: grid; grid-template-columns: repeat(3, minmax(150px, 1fr)); gap: 14px; margin: 28px 0; max-width: 680px; }
+@media (max-width: 640px) { .stats { grid-template-columns: 1fr; } }
+.stat {
+  border: 1px solid var(--line); border-radius: 6px; padding: 22px 20px 18px;
+  background: var(--card); backdrop-filter: blur(5px);
+}
+.stat .n { font-family: var(--mono); font-size: clamp(26px, 2.6vw, 36px); font-weight: 700; }
+.stat .l { font-family: var(--mono); font-size: 10px; letter-spacing: .3em; color: var(--faint); text-transform: uppercase; margin-top: 8px; }
+.stat.vio .n   { color: var(--vio); text-shadow: 0 0 24px rgba(167,139,250,.5); }
+.stat.ember .n { color: var(--ember); text-shadow: 0 0 24px rgba(255,138,60,.35); }
+.stat.green .n { color: var(--green); text-shadow: 0 0 24px rgba(74,222,128,.3); }
+
+/* Ledger: two symmetric columns ------------------------------------------------ */
+.ledger { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 26px 0; max-width: 900px; }
+@media (max-width: 760px) { .ledger { grid-template-columns: 1fr; } }
+.led {
+  border: 1px solid var(--line); border-radius: 6px; padding: 20px 22px;
+  background: var(--card); backdrop-filter: blur(5px);
+  font-family: var(--mono); font-size: 12.5px;
+}
+.led h4 { font-size: 10px; letter-spacing: .4em; text-transform: uppercase; font-weight: 400; margin-bottom: 14px; }
+.led.no  h4 { color: #e0526f; }
+.led.yes h4 { color: var(--green); }
+.led div { padding: 9px 0; border-top: 1px solid rgba(167,139,250,.08); line-height: 1.6; }
+.led.no  div::before { content: "✕  "; color: #e0526f; }
+.led.yes div::before { content: "✓  "; color: var(--green); }
+
+/* Math box ---------------------------------------------------------------------- */
+.math {
+  border: 1px solid rgba(167,139,250,.24); border-radius: 6px;
+  padding: 26px 30px; margin: 28px 0; max-width: 620px;
+  background: var(--card); backdrop-filter: blur(5px);
+  font-family: var(--mono); font-size: 13px; line-height: 2.1;
+}
+.math .k { font-size: 10px; letter-spacing: .4em; color: var(--vio); text-transform: uppercase; margin-bottom: 14px; }
+.math .eq { color: #fff; font-size: 14.5px; }
+.math .eq.hi { color: var(--vio); }
+.math .as { color: var(--faint); font-size: 11px; margin-top: 14px; line-height: 1.9; }
+
+figure { margin: 34px 0; }
+figure svg { width: 100%; max-width: 520px; height: auto; display: block; }
+figcaption { font-family: var(--mono); font-size: 10px; letter-spacing: .3em; color: var(--faint); text-transform: uppercase; margin-top: 12px; }
+
+footer {
+  margin-top: 96px; padding-top: 32px; border-top: 1px solid var(--line);
+  font-family: var(--mono); font-size: 11px; color: var(--faint); letter-spacing: .15em; line-height: 2.4;
+}
+footer a { color: var(--dim); text-decoration: none; }
+footer a:hover { color: var(--vio); }
+.fine { font-size: 12.5px; color: var(--dim); max-width: 78ch; }
+
+@media print {
+  body { background: #fff; color: #111; }
+  #gl, #scrim, nav.toc, #hud { display: none; }
+  header h1 { color: #000; text-shadow: none; }
+}
+</style>
+</head>
+<body>
+
+<canvas id="gl" aria-hidden="true"></canvas>
+<div id="scrim" aria-hidden="true"></div>
+
+<div id="hud"><a href="index.html">◄ the fall</a></div>
+
+<div class="wrap">
+
+<nav class="toc" aria-label="contents">
+  <a href="#abstract">00 · abstract</a>
+  <a href="#cycle">01 · the cycle</a>
+  <a href="#net">02 · net effect</a>
+  <a href="#liquidity">03 · liquidity</a>
+  <a href="#flywheel">04 · the flywheel</a>
+  <a href="#tokenomics">05 · tokenomics</a>
+  <a href="#trust">06 · trust model</a>
+  <a href="#security">07 · security</a>
+  <a href="#disclaimer">08 · disclaimer</a>
+</nav>
+
+<main>
+
+<header>
+  <h1>VOID</h1>
+  <div class="tag">technical paper · v2 · solana</div>
+  <div class="meta">
+    an immutable program that burns its own sell-side liquidity<br>
+    contract address: <b id="wpca">genesis pending</b>
+  </div>
+</header>
+
+<section id="abstract">
+  <div class="shead"><span class="snum">00</span><h2>Abstract</h2></div>
+  <p>VOID is a deflationary protocol on Solana that consumes its own liquidity. On a fixed on-chain schedule, an immutable program withdraws <b>1% of its trading position</b> from the VOID/SOL pool. Every VOID token that emerges is <b>burned</b> — destroyed at the SPL token level, not parked in a dead wallet. The SOL is <b>captured</b>, and roughly half of it returns immediately to the same pool as a buyback.</p>
+  <p>The result is asymmetric by construction: each cycle removes about three times more VOID from the market than SOL. No taxes, no reflections, no hidden inflation, and after renouncement, nobody with the power to change any of it.</p>
+  <div class="pull">Supply only falls. The pool only tightens. There is no third direction.</div>
+</section>
+
+<section id="cycle">
+  <div class="shead"><span class="snum">01</span><h2>The Cycle</h2></div>
+  <p>The protocol's liquidity lives in a single VOID/SOL position on <b>Meteora DAMM v2</b>, owned by a <b>program-derived address</b> — an account no human holds keys to. The position was created inside the program and has never been touched by a person.</p>
+  <p>When the interval elapses, <b>any wallet on Solana</b> may trigger the cycle. There is no privileged caller and no way to skip a turn.</p>
+  <ol class="steps">
+    <li>All trading fees accrued to the position are claimed.</li>
+    <li>1% of the position's liquidity is withdrawn.</li>
+    <li>Every VOID received — from the withdrawal and from fees alike — is <b>burned</b>.</li>
+    <li>The SOL is captured: 10% funds operations, 90% enters the protocol treasury.</li>
+    <li>Roughly half the treasury's share <b>buys VOID back from the same pool</b>. The other half acquires partner assets on Solana.</li>
+    <li>The bought VOID and the partner assets are paired into <b>side pools</b> — Meteora DAMM v2, or DLMM where a tighter range is wanted.</li>
+  </ol>
+  <p>Steps 1–4 are on-chain, atomic, and unstoppable. Steps 5–6 are treasury deployment: the destination is fixed by design, the timing is not.</p>
+
+  <h3>Schedule</h3>
+  <div class="tblwrap"><table>
+    <tr><th>supply burned</th><th>interval</th></tr>
+    <tr><td>0 – 5%</td><td class="hot">6 hours</td></tr>
+    <tr><td>5 – 10%</td><td class="hot">12 hours</td></tr>
+    <tr><td>10 – 15%</td><td class="hot">18 hours</td></tr>
+    <tr><td>15%+</td><td class="hot">24 hours — cap, permanent</td></tr>
+  </table></div>
+  <p>Burned percentage is read live from the mint. The schedule cannot be gamed, because the quantity it measures is the quantity it already destroyed.</p>
+
+  <h3>Fee routing</h3>
+  <p>The pool charges a flat 1% trading fee plus a dynamic volatility surcharge, collected <b>on the output token</b> of each swap — the side leaving the pool. This is the opposite of the Uniswap V3 convention, where the fee comes out of the input, and it is the hinge the entire design turns on:</p>
+  <div class="tblwrap"><table>
+    <tr><th>direction</th><th>fee paid in</th><th>destiny</th></tr>
+    <tr><td>buy (SOL → VOID)</td><td class="hot">VOID</td><td class="hot">burned next cycle</td></tr>
+    <tr><td>sell (VOID → SOL)</td><td class="fire">SOL</td><td class="fire">captured to treasury</td></tr>
+  </table></div>
+  <div class="pull">Buying accelerates the burn. Selling funds the expansion. There is no direction to trade that does not feed the machine.</div>
+</section>
+
+<section id="net">
+  <div class="shead"><span class="snum">02</span><h2>Net Effect on the Pool</h2></div>
+  <p>A proportional withdrawal alone would leave the pool's ratio untouched. The buyback is what breaks the symmetry. Follow one full cycle through a pool holding <b>V</b> VOID and <b>S</b> SOL:</p>
+
+  <div class="math">
+    <div class="k">one cycle</div>
+    <div class="eq">withdraw 1% &nbsp;→&nbsp; pool = 0.990 V , 0.990 S</div>
+    <div class="eq">burn the VOID &nbsp;→&nbsp; 0.01 V destroyed, permanently</div>
+    <div class="eq">buy back with ~45% of the withdrawn SOL</div>
+    <div class="eq hi">final &nbsp;→&nbsp; pool ≈ 0.9855 V , 0.9945 S</div>
+    <div class="as">
+      Constant product, fees omitted for clarity (they accrue back to the position anyway).
+      Buyback ≈ 45% of withdrawn SOL = half of the 90% treasury share.
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat vio"><div class="n">−1.45%</div><div class="l">VOID in pool</div></div>
+    <div class="stat ember"><div class="n">−0.55%</div><div class="l">SOL in pool</div></div>
+    <div class="stat green"><div class="n">+0.9%</div><div class="l">quoted price</div></div>
+  </div>
+
+  <p>Per cycle, sell-side inventory drains roughly <b>three times faster</b> than buy-side inventory, and the pool's quoted price ends each cycle higher than it started — compounding every interval, forever.</p>
+  <p>None of this is an accounting entry. The buyback is a real market order against the same pool every holder trades on, executed with SOL the protocol took out of that pool minutes earlier. The VOID it acquires is not burned — it becomes the VOID side of the next partner pool, which is how the protocol's reach expands without ever selling a token it did not first buy on the open market.</p>
+</section>
+
+<section id="liquidity">
+  <div class="shead"><span class="snum">03</span><h2>Liquidity Architecture</h2></div>
+  <h3>Genesis: single-sided</h3>
+  <p>At launch the pool holds only VOID, deposited across a range whose lower bound <b>is</b> the genesis price. No initial SOL, no seeded market-making — the first buyer sets the pool in motion. A structural consequence: <b>the pool cannot quote a price below genesis.</b> That is not a promise about markets; it is a property of the range.</p>
+
+  <h3>The main pool is permanent</h3>
+  <p>The position is held by a program-derived address with exactly one liquidity-touching code path: the burn cycle. There is no withdrawal instruction, no migration hatch, no emergency exit. The only way liquidity ever leaves the main pool is 1% at a time, on schedule, with the VOID side destroyed on the way out.</p>
+
+  <h3>Side pools</h3>
+  <p>Side pools pair VOID against other Solana assets and are actively managed by the protocol — rebalanced, resized, and redeployed as the ecosystem grows. They exist to manufacture volume, and volume is the input the whole machine runs on.</p>
+</section>
+
+<section id="flywheel">
+  <div class="shead"><span class="snum">04</span><h2>The Flywheel</h2></div>
+  <p>Every expansion of the ecosystem begins with buying VOID. That single fact makes growth and buy pressure the same event.</p>
+
+  <figure>
+    <svg viewBox="0 0 560 380" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="the flywheel">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#6d4fc4"/>
+        </marker>
+      </defs>
+      <circle cx="280" cy="190" r="128" stroke="#2a1358" stroke-width="1" stroke-dasharray="3 6"/>
+      <g font-family="ui-monospace, Menlo, Consolas, monospace" font-size="12" letter-spacing="2" fill="#e2dcf7" text-anchor="middle">
+        <text x="280" y="52"  fill="#a78bfa">BURN</text>
+        <text x="280" y="68"  font-size="9" fill="#968dbf">1% pulled · VOID destroyed</text>
+        <text x="470" y="150">CAPTURE</text>
+        <text x="470" y="166" font-size="9" fill="#968dbf">SOL → treasury</text>
+        <text x="420" y="322">DEPLOY</text>
+        <text x="420" y="338" font-size="9" fill="#968dbf">buy VOID · seed side pool</text>
+        <text x="140" y="322">VOLUME</text>
+        <text x="140" y="338" font-size="9" fill="#968dbf">arbitrage loops</text>
+        <text x="90"  y="150">FEES</text>
+        <text x="90"  y="166" font-size="9" fill="#968dbf">VOID side burns</text>
+      </g>
+      <g stroke="#6d4fc4" stroke-width="1.4" marker-end="url(#arr)">
+        <path d="M 322 78 A 118 118 0 0 1 424 136"/>
+        <path d="M 442 186 A 118 118 0 0 1 404 292"/>
+        <path d="M 350 316 A 118 118 0 0 1 212 318"/>
+        <path d="M 158 294 A 118 118 0 0 1 116 188"/>
+        <path d="M 132 132 A 118 118 0 0 1 238 78"/>
+      </g>
+      <circle cx="280" cy="190" r="34" fill="#000" stroke="#a78bfa" stroke-width="2"/>
+      <circle cx="280" cy="190" r="46" stroke="#a78bfa" stroke-opacity=".25" stroke-width="1"/>
+    </svg>
+    <figcaption>fig. 1 — each pass leaves less VOID in existence</figcaption>
+  </figure>
+
+  <h3>Why the volume outlives the attention</h3>
+  <p>Most tokens have exactly one source of volume: people currently interested in that token. When attention leaves, volume goes to zero, fees go to zero, and whatever mechanism the protocol advertised quietly stops running.</p>
+  <p>VOID is built to survive that. Paired against dozens of Solana assets, it sits at the centre of a web of pools that must stay in agreement with each other. Every time <b>any</b> partner asset moves — up or down, on its own news, with no VOID holder involved — the side pool is momentarily mispriced against the main pool, and arbitrage closes the gap by routing volume <b>through VOID</b>. That volume pays fees. The VOID side of those fees burns.</p>
+  <div class="pull">The protocol does not need people to be interested in VOID. It needs Solana to be volatile.</div>
+
+  <div class="math">
+    <div class="k">stylized — the index effect</div>
+    <div class="eq">partner assets rise 2× against SOL</div>
+    <div class="eq">VOID is anchored half to SOL, half to partners</div>
+    <div class="eq hi">equilibrium ≈ √(1 × 2) ≈ 1.41×</div>
+    <div class="as">
+      Constant-product pools settle toward the geometric mean of the prices they are
+      anchored to. Assumes comparable depth across pools and no external anchor
+      dominating. Illustrative of direction and shape, not a guarantee of magnitude.
+    </div>
+  </div>
+
+  <p>The same arithmetic works downward — a broad decline pulls the same way, and pretending otherwise would be marketing. But the two directions are not symmetric in what they leave behind. A falling price means sellers have pushed VOID back <i>into</i> the main pool — so every scheduled withdrawal catches <b>more tokens</b> and burns deeper. The machine eats fastest exactly when the market is weakest, and what it eats never comes back for the next recovery to lift.</p>
+  <p>Whatever price does, the supply math runs one way only: every cycle ends with fewer VOID in existence than at any moment in history, and a bag that was 0.1% of supply at genesis is quietly becoming 0.11%, 0.12%, 0.15% of everything that remains — without its holder lifting a finger. Red days accelerate the burn. Green days fund it.</p>
+  <div class="pull">Price is cyclical. Scarcity is a ratchet.</div>
+</section>
+
+<section id="tokenomics">
+  <div class="shead"><span class="snum">05</span><h2>Tokenomics</h2></div>
+  <div class="tblwrap"><table>
+    <tr><th>property</th><th>value</th></tr>
+    <tr><td>standard</td><td>SPL (classic), 6 decimals</td></tr>
+    <tr><td>genesis supply</td><td class="hot">100,000,000 — fixed forever</td></tr>
+    <tr><td>into the launch pool</td><td class="hot">98,000,000 — 98%</td></tr>
+    <tr><td>operator allocation</td><td>2,000,000 — 2%</td></tr>
+    <tr><td>presale</td><td>none</td></tr>
+    <tr><td>mint authority</td><td>revoked at genesis</td></tr>
+    <tr><td>freeze authority</td><td>revoked at genesis</td></tr>
+    <tr><td>transfer tax</td><td>none — fees exist only inside the pool</td></tr>
+  </table></div>
+  <p>98% of the supply enters the pool at genesis. The remaining 2% is the operator allocation. Beyond it, the protocol acquires every VOID it will ever touch the same way anyone else does: buying at market, with SOL the burn produced.</p>
+</section>
+
+<section id="trust">
+  <div class="shead"><span class="snum">06</span><h2>Trust Model</h2></div>
+  <p>Operator terms are two numbers: a <b>2% allocation</b> and <b>10% of captured SOL</b>. The other 90% is capital that goes back into the machine — buying VOID, seeding pools, widening the surface that generates volume.</p>
+  <p>That ratio is the incentive design, not a modest ask. Operator revenue scales with volume, and volume scales with how many pools exist and how much is deployed into them. Taking more from any single cycle would slow the only variable that determines what every future cycle pays. The nine-to-one split makes growing the system strictly more profitable than harvesting it — and unlike a token bag, a revenue share cannot be dumped on holders.</p>
+
+  <h3>The road to immutability</h3>
+  <p>deploy → initialize → verified build published → IDL on-chain → pool wired → live soak → <b>upgrade authority renounced.</b> After renouncement the program is no longer software anyone maintains. The schedule, the split, the burn: unchangeable by anyone, including the people who wrote it.</p>
+
+  <h3>The ledger</h3>
+  <div class="ledger">
+    <div class="led no">
+      <h4>impossible — for anyone, forever</h4>
+      <div>mint new VOID — authority is null</div>
+      <div>freeze anyone's tokens — authority is null</div>
+      <div>withdraw the main position — no code path exists</div>
+      <div>change the schedule, the split, or the destinations</div>
+      <div>touch VOID held by the program — treasury moves any asset except VOID</div>
+    </div>
+    <div class="led yes">
+      <h4>guaranteed — for everyone, forever</h4>
+      <div>trigger the burn — any wallet, permissionlessly</div>
+      <div>verify the deployed binary against the published source</div>
+      <div>read every parameter on-chain before trusting a word of this</div>
+      <div>watch every burn as it happens — the mint's supply is public state</div>
+    </div>
+  </div>
+</section>
+
+<section id="security">
+  <div class="shead"><span class="snum">07</span><h2>Security</h2></div>
+  <p>The position cannot be stolen because no instruction to transfer it exists. Custody sits with a program-derived address whose only liquidity-touching path is the burn cycle itself. Every account the cycle touches is pinned against on-chain state, so substitution attacks fail. Re-initialization is impossible.</p>
+  <p>And <b>reentrancy — the attack class that has drained more AMM protocols than any other — is structurally impossible here</b>: the Solana runtime refuses reentrant cross-program invocation at the platform level. It is not that this code defends against the attack. The chain does not permit the attack to be expressed.</p>
+
+  <h3>Residual risks, disclosed</h3>
+  <ul>
+    <li><b>Meteora dependency.</b> The DAMM v2 program is upgradeable by its team — a live dependency shared with every protocol built on it.</li>
+    <li><b>Operations account liveness.</b> The operations destination is a token account that could in principle be closed. Recreating it is permissionless and automated; the worst case is a delayed cycle, never a lost one.</li>
+    <li><b>Audit status.</b> An internal security review is published in the repository. No external audit has been commissioned. The mitigations are a verified build, an on-chain IDL, and a live soak period before renouncement.</li>
+    <li><b>Treasury deployment is discretionary.</b> Steps 1–4 of the cycle are enforced by the program. Which assets get paired, and when, is an operator decision.</li>
+  </ul>
+</section>
+
+<section id="disclaimer">
+  <div class="shead"><span class="snum">08</span><h2>Disclaimer</h2></div>
+  <p class="fine">This document is not a prospectus and does not constitute a solicitation for investment. Nothing herein pertains to an offering of securities in any jurisdiction. VOID is an experiment in autonomous market structure; digital assets carry substantial risk, including total loss. Read the code, verify the claims on-chain, and act on your own judgment.</p>
+</section>
+
+<footer>
+  <a href="index.html">the fall</a> · voidsolana.com<br>
+  supply only falls
+</footer>
+
+</main>
+</div>
+
+<script>
+"use strict";
+/* ==========================================================================
+   The same singularity as the fall — becalmed. Identical lensing math and
+   accretion disk, fixed camera, planets still falling in. The scrim above it
+   keeps the reading column dark; the hole owns the right edge.
+   ========================================================================== */
+const canvas = document.getElementById("gl");
+const gl = canvas.getContext("webgl", { antialias: false, alpha: false, powerPreference: "low-power" });
+
+const VERT = `
+attribute vec2 aP;
+void main(){ gl_Position = vec4(aP, 0.0, 1.0); }`;
+
+const FRAG = `
+precision highp float;
+uniform vec2  uRes;
+uniform vec2  uBH;
+uniform float uT;
+uniform float uRS;
+
+float h21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
+float n2(vec2 p){
+  vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+  return mix(mix(h21(i), h21(i+vec2(1,0)), f.x), mix(h21(i+vec2(0,1)), h21(i+vec2(1,1)), f.x), f.y);
+}
+float fbm(vec2 p){
+  float a = 0.5, s = 0.0;
+  for(int i = 0; i < 4; i++){ s += a*n2(p); p = p*2.03 + 17.7; a *= 0.55; }
+  return s;
+}
+mat2 rot2(float a){ float s = sin(a), c = cos(a); return mat2(c, -s, s, c); }
+
+vec3 planets(vec2 c, float shadowR){
+  vec3 acc = vec3(0.0);
+  for(int i = 0; i < 4; i++){
+    float fi = float(i);
+    float period = 34.0 + fi*13.0;
+    float seed = h21(vec2(fi*7.31, fi*3.77));
+    float phase = fract(uT/period + seed);
+    float rad = mix(0.95, shadowR*0.7, pow(phase, 1.7));
+    float ang = seed*6.2831 + phase*(4.0 + seed*2.0) + 2.5*pow(phase, 3.0);
+    float flat_ = mix(1.0, 0.30, smoothstep(0.35, 0.9, phase));
+    vec2 ppos = rot2(-0.20) * (vec2(cos(ang), sin(ang)*flat_) * rad);
+    vec2 local = c - ppos;
+    vec2 rdir = normalize(ppos + vec2(1e-4, 0.0));
+    float lr = dot(local, rdir);
+    float lt = dot(local, vec2(-rdir.y, rdir.x));
+    float prox = smoothstep(0.55, 0.95, phase);
+    vec2 tide = vec2(lr/(1.0 + prox*6.0), lt*(1.0 + prox*1.5));
+    float prad = (0.020 + seed*0.020) * (1.0 - 0.35*phase);
+    float d = length(tide);
+    float body = smoothstep(prad, prad*0.72, d);
+    if (body <= 0.001) continue;
+    float shade = clamp(0.30 + 0.85*(0.5 - lr/(2.0*prad)), 0.12, 1.2);
+    vec3 base = i == 0 ? vec3(0.25, 0.80, 0.72) : i == 1 ? vec3(1.00, 0.68, 0.28)
+              : i == 2 ? vec3(0.38, 0.52, 1.00) : vec3(0.95, 0.45, 0.75);
+    float born = smoothstep(0.0, 0.06, phase);
+    float gone = smoothstep(shadowR*0.95, shadowR*1.35, rad);
+    acc += base * body * shade * born * gone;
+    float rim = smoothstep(prad*0.9, prad, d) * (1.0 - smoothstep(prad, prad*1.25, d));
+    acc += vec3(0.6, 0.4, 1.0) * rim * 0.5 * born * gone;
+  }
+  return acc;
+}
+
+vec3 starLayer(vec2 p, float density, float size, float thresh){
+  vec2 g = floor(p*density), f = fract(p*density) - 0.5;
+  float rnd = h21(g);
+  vec2 off = vec2(h21(g + 1.37), h21(g + 7.71)) - 0.5;
+  float d = length(f - off*0.8);
+  float m = smoothstep(size, 0.0, d) * step(thresh, rnd);
+  float tw = 0.55 + 0.45*sin(uT*(1.0 + rnd*3.0) + rnd*40.0);
+  return vec3(m * tw);
+}
+vec3 background(vec2 w){
+  vec3 col = starLayer(w, 13.0, 0.055, 0.78)
+           + starLayer(w, 31.0, 0.040, 0.82) * 0.65
+           + starLayer(w, 67.0, 0.032, 0.85) * 0.38;
+  float n  = fbm(w*2.4 + vec2(3.1, 7.2));
+  float m  = fbm(w*1.1 - vec2(1.0, 2.0));
+  col += vec3(0.30, 0.12, 0.55) * pow(n, 2.6) * 1.15;
+  col += vec3(0.09, 0.04, 0.28) * pow(m, 2.0) * 0.9;
+  return col;
+}
+
+void main(){
+  vec2 frag = gl_FragCoord.xy;
+  vec2 c    = (frag - uBH) / uRes.y;
+  float rs  = uRS / uRes.y;
+  float r   = length(c);
+  vec2 dir  = r > 1e-5 ? c/r : vec2(1.0, 0.0);
+
+  float A   = 1.9 * rs * rs;
+  float sr  = r - A / max(r, 1e-4);
+  vec2 sp   = dir * sr;
+  float shadowR = sqrt(A);
+
+  vec2 w = sp * 0.75 + vec2(uT*0.004, uT*0.0016);
+  vec3 col = background(w);
+  float ringZone = exp(-abs(r - shadowR) * (8.0 / max(rs, 1e-3)));
+  col = mix(col, background(-w*0.97), clamp(ringZone*0.55, 0.0, 0.55));
+
+  vec2 rc = rot2(-0.20) * c;
+  {
+    float incl = 3.3;
+    vec2 d  = vec2(rc.x, rc.y*incl);
+    float rd  = length(d);
+    float ang = atan(d.y, d.x);
+    float rIn = shadowR*1.10, rOut = shadowR*3.4;
+    if (rd < rOut*1.25) {
+      float band = smoothstep(rIn*0.97, rIn*1.2, rd) * (1.0 - smoothstep(rOut*0.7, rOut, rd));
+      float speed = 2.1 / max(pow(rd/shadowR, 1.5), 0.3);
+      float sw  = fbm(vec2(ang*3.0 + uT*speed, rd*22.0/shadowR));
+      float bright = pow(clamp(rIn/rd, 0.0, 1.0), 1.6) * (0.45 + 0.9*sw);
+      float dopp = 1.0 + 0.9*(d.x/max(rd, 1e-4));
+      float front = smoothstep(0.15*shadowR, -0.30*shadowR, rc.y);
+      float farOK = smoothstep(shadowR*1.9, shadowR*2.4, rd);
+      float vis   = max(front, farOK);
+      vec3 dc = mix(vec3(0.42, 0.20, 0.90), vec3(1.0, 0.93, 1.0), clamp(bright*1.25 - 0.12, 0.0, 1.0));
+      col += dc * band * bright * dopp * vis * 1.55;
+
+      vec2  m2   = vec2(rc.x, abs(rc.y));
+      float arcR = length(vec2(m2.x, m2.y*1.15));
+      float arc  = exp(-pow((arcR - shadowR*1.22)/(shadowR*0.16), 2.0));
+      float mang = atan(m2.y*incl, m2.x);
+      float msw  = fbm(vec2(mang*3.0 + uT*1.8, 6.0));
+      col += vec3(0.78, 0.58, 1.0) * arc * (0.32 + 0.45*msw) * smoothstep(0.0, shadowR*0.6, rc.y);
+    }
+  }
+
+  col += planets(c, shadowR);
+
+  float pr = exp(-abs(r - shadowR*1.03) * (40.0 / max(rs, 1e-3)));
+  col += vec3(0.85, 0.70, 1.0) * pr * 1.15;
+
+  float inside = 1.0 - smoothstep(shadowR*0.90, shadowR*1.0, r);
+  col *= 1.0 - inside;
+
+  vec2 uv = frag / uRes;
+  col *= 1.0 - 0.40 * pow(length(uv - 0.5) * 1.3, 2.0);
+  col += (h21(frag + fract(uT)*13.0) - 0.5) * 0.028;
+  gl_FragColor = vec4(pow(max(col, 0.0), vec3(0.85)), 1.0);
+}`;
+
+let prog = null, uni = {};
+const dpr = Math.min(devicePixelRatio || 1, 1.5); // background — retina not needed
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function boot() {
+  if (!gl) return false;
+  const sh = (type, src) => {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { console.error(gl.getShaderInfoLog(s)); return null; }
+    return s;
+  };
+  const v = sh(gl.VERTEX_SHADER, VERT), f = sh(gl.FRAGMENT_SHADER, FRAG);
+  if (!v || !f) return false;
+  prog = gl.createProgram();
+  gl.attachShader(prog, v); gl.attachShader(prog, f); gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { console.error(gl.getProgramInfoLog(prog)); return false; }
+  gl.useProgram(prog);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+  const aP = gl.getAttribLocation(prog, "aP");
+  gl.enableVertexAttribArray(aP);
+  gl.vertexAttribPointer(aP, 2, gl.FLOAT, false, 0, 0);
+  for (const n of ["uRes","uBH","uT","uRS"]) uni[n] = gl.getUniformLocation(prog, n);
+  return true;
+}
+
+function resize() {
+  canvas.width = Math.round(innerWidth * dpr);
+  canvas.height = Math.round(innerHeight * dpr);
+  if (gl && prog) gl.viewport(0, 0, canvas.width, canvas.height);
+}
+addEventListener("resize", resize);
+
+const t0 = performance.now();
+function frame(now) {
+  if (prog && !document.hidden) {
+    const narrow = innerWidth < 960;
+    // The hole owns the right edge on desktop, floats high-centre on mobile.
+    // Tiny scroll parallax keeps it alive without ever chasing the text.
+    const bx = (narrow ? 0.5 : 0.80) * innerWidth;
+    const by = (narrow ? 0.30 : 0.42) * innerHeight + scrollY * 0.015 * innerHeight / 1000;
+    gl.uniform2f(uni.uRes, canvas.width, canvas.height);
+    gl.uniform2f(uni.uBH, bx * dpr, canvas.height - by * dpr);
+    gl.uniform1f(uni.uT, (now - t0) / 1000);
+    gl.uniform1f(uni.uRS, Math.min(innerWidth, innerHeight) * 0.075 * dpr);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+  if (!reduced) requestAnimationFrame(frame);
+}
+
+if (boot()) {
+  resize();
+  requestAnimationFrame(frame); // reduced motion: renders exactly one frame
+} else {
+  canvas.style.background =
+    "radial-gradient(ellipse 60% 50% at 80% 40%, rgba(120,70,220,.25), transparent 65%), #04000d";
+}
+
+/* CA fills itself from the same stats.json the fall uses. */
+fetch("stats.json", { cache: "no-store" })
+  .then((r) => (r.ok ? r.json() : null))
+  .then((d) => { if (d && d.live && d.mint) document.getElementById("wpca").textContent = d.mint; })
+  .catch(() => {});
+</script>
+</body>
+</html>

@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VOID — a singularity on Solana</title>
+<meta name="description" content="Every six hours, the Void feeds. One percent of its own liquidity — burned on-chain, forever. Supply only falls.">
+<meta property="og:title" content="VOID">
+<meta property="og:description" content="A singularity on Solana. Every six hours, the Void feeds. Supply only falls.">
+<meta name="theme-color" content="#050014">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23050014'/%3E%3Ccircle cx='32' cy='32' r='17' fill='none' stroke='%23a78bfa' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='9' fill='%23000'/%3E%3C/svg%3E">
+<style>
+/* ==========================================================================
+   VOID — THE DESCENT
+   One file. No frameworks, no CDN, no build step. Deploys to any static host.
+   ========================================================================== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+
+:root {
+  --vio:      #a78bfa;
+  --vio-dim:  #6d4fc4;
+  --vio-deep: #2a1358;
+  --ink:      #e9e4ff;
+  --ink-dim:  #8d84b8;
+  --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+  --disp: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+html, body { background: #030010; color: var(--ink); font-family: var(--disp); }
+body { height: 800vh; overflow-x: hidden; }
+::selection { background: var(--vio-deep); color: #fff; }
+
+/* The universe ---------------------------------------------------------- */
+#gl, #fallback {
+  position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh;
+  display: block; z-index: 0;
+}
+#fallback {
+  display: none;
+  background:
+    radial-gradient(ellipse 80% 55% at 62% 45%, rgba(120,70,220,.28), transparent 60%),
+    radial-gradient(circle at 62% 45%, #000 0 9vmin, rgba(167,139,250,.5) 9.6vmin, transparent 11vmin),
+    #030010;
+}
+body.nogl #gl { display: none; }
+body.nogl #fallback { display: block; }
+
+/* Scenes: fixed overlays, faded in/out by JS ----------------------------- */
+.scene {
+  position: fixed; inset: 0; z-index: 2;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 6vmin;
+  opacity: 0; visibility: hidden; pointer-events: none;
+  will-change: opacity, transform;
+}
+.scene.on { visibility: visible; }
+.scene.on .act { pointer-events: auto; }
+
+/* s0 — arrival ----------------------------------------------------------- */
+#s0 h1 {
+  font-size: clamp(64px, 17vw, 240px);
+  font-weight: 900; letter-spacing: .30em; text-indent: .30em;
+  color: #fff;
+  text-shadow: 0 0 18px rgba(167,139,250,.85), 0 0 90px rgba(120,70,220,.45);
+}
+#s0 .sub {
+  margin-top: 2.2vmin; font-family: var(--mono);
+  font-size: clamp(11px, 1.7vw, 16px); letter-spacing: .55em; text-indent: .55em;
+  color: var(--ink-dim); text-transform: uppercase;
+}
+#hint {
+  position: absolute; bottom: max(5vh, env(safe-area-inset-bottom, 0px) + 24px);
+  left: 0; right: 0;
+  font-family: var(--mono); font-size: 11px; letter-spacing: .5em; text-indent: .5em;
+  color: var(--ink-dim); text-transform: uppercase;
+  animation: sink 2.6s ease-in-out infinite;
+}
+@keyframes sink {
+  0%, 100% { transform: translateY(0);   opacity: .55; }
+  50%      { transform: translateY(9px); opacity: 1;   }
+}
+
+/* s1 — the machine (lore lines) ------------------------------------------ */
+#s1 .line {
+  font-size: clamp(19px, 3.4vw, 36px); font-weight: 300; line-height: 1.5;
+  margin: 1.6vmin 0; opacity: 0; will-change: opacity, transform;
+}
+#s1 .line b { font-weight: 700; color: #fff; }
+.ch { display: inline-block; will-change: transform, opacity; } /* spaghettification unit */
+
+/* s2 — debris (stats) ----------------------------------------------------- */
+.debris { display: flex; flex-direction: column; gap: 4.5vmin; }
+.stat  { will-change: transform; }
+.stat .k {
+  font-family: var(--mono); font-size: clamp(10px, 1.4vw, 13px);
+  letter-spacing: .45em; text-indent: .45em; color: var(--ink-dim);
+  text-transform: uppercase; margin-bottom: 1vmin;
+}
+.stat .v {
+  font-family: var(--mono); font-size: clamp(26px, 5.4vw, 56px); font-weight: 700;
+  color: #fff; text-shadow: 0 0 26px rgba(167,139,250,.4);
+}
+.stat .v .unit { font-size: .42em; color: var(--vio); font-weight: 400; letter-spacing: .1em; }
+.stat .note { font-family: var(--mono); font-size: 11px; color: var(--ink-dim); margin-top: .8vmin; letter-spacing: .12em; }
+#s2 .caption {
+  margin-top: 5vmin; font-family: var(--mono); font-size: 11px;
+  letter-spacing: .3em; color: var(--vio-dim); text-transform: uppercase;
+}
+
+/* Odometer ---------------------------------------------------------------- */
+.odo { display: inline-flex; overflow: hidden; }
+.odo .grp { display: inline-flex; }
+.odo .sep { color: var(--vio-dim); }
+.odo .col { display: inline-block; height: 1.18em; overflow: hidden; }
+.odo .col span {
+  display: block; height: 1.18em; line-height: 1.18em;
+  transition: transform 1.4s cubic-bezier(.2, .9, .25, 1);
+}
+
+/* s3 — the last light (CA) ------------------------------------------------ */
+#s3 .k {
+  font-family: var(--mono); font-size: clamp(10px, 1.5vw, 13px);
+  letter-spacing: .5em; text-indent: .5em; color: var(--vio);
+  text-transform: uppercase; margin-bottom: 3vmin;
+}
+#ca {
+  font-family: var(--mono); font-size: clamp(12px, 2.4vw, 21px);
+  color: #fff; word-break: break-all; max-width: 34em; line-height: 1.7;
+  padding: 2.4vmin 3.2vmin;
+  border: 1px solid rgba(167,139,250,.35); border-radius: 4px;
+  background: rgba(5, 0, 20, .55); backdrop-filter: blur(3px);
+  text-shadow: 0 0 14px rgba(167,139,250,.6);
+}
+#ca.pending { color: var(--ink-dim); letter-spacing: .3em; text-indent: .3em; text-shadow: none; }
+#copy {
+  margin-top: 2.6vmin; font-family: var(--mono); font-size: 12px;
+  letter-spacing: .4em; text-indent: .4em; text-transform: uppercase;
+  color: var(--vio); background: none; border: 1px solid rgba(167,139,250,.4);
+  border-radius: 3px; padding: 12px 26px; cursor: pointer;
+  transition: background .25s, color .25s;
+}
+#copy:hover { background: rgba(167,139,250,.15); color: #fff; }
+#s3 .warn { margin-top: 2vmin; font-family: var(--mono); font-size: 10px; letter-spacing: .2em; color: var(--ink-dim); }
+
+/* s4 — inside ------------------------------------------------------------- */
+#s4 { background: #000; transition: background 1s; }
+#s4 .k {
+  font-family: var(--mono); font-size: clamp(10px, 1.4vw, 12px);
+  letter-spacing: .6em; text-indent: .6em; color: var(--vio-dim);
+  text-transform: uppercase; margin-bottom: 3vmin;
+}
+#odoBig {
+  font-family: var(--mono); font-size: clamp(34px, 8.5vw, 96px); font-weight: 700;
+  color: var(--vio);
+  text-shadow: 0 0 34px rgba(167,139,250,.55), 0 0 120px rgba(120,70,220,.3);
+}
+#s4 .of { font-family: var(--mono); font-size: clamp(11px, 1.6vw, 14px); color: var(--ink-dim); margin-top: 1.6vmin; letter-spacing: .2em; }
+#s4 .epitaph {
+  margin-top: 6vmin; font-size: clamp(14px, 2.2vw, 20px); font-weight: 300;
+  color: var(--ink); line-height: 2; max-width: 30em;
+}
+#links { margin-top: 7vmin; display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; }
+#links a {
+  font-family: var(--mono); font-size: 12px; letter-spacing: .35em; text-indent: .35em;
+  text-transform: uppercase; text-decoration: none; color: var(--ink);
+  border: 1px solid rgba(167,139,250,.35); border-radius: 3px; padding: 14px 26px;
+  transition: background .25s, color .25s, border-color .25s;
+}
+#links a:hover { background: rgba(167,139,250,.14); border-color: var(--vio); color: #fff; }
+#links a.primary { background: var(--vio-deep); border-color: var(--vio); color: #fff; }
+#links a.primary:hover { background: #3b1d78; }
+#s4 .foot { position: absolute; bottom: max(3.5vh, env(safe-area-inset-bottom, 0px) + 14px); font-family: var(--mono); font-size: 10px; letter-spacing: .3em; color: #3d3564; }
+
+/* HUD ---------------------------------------------------------------------- */
+#brand {
+  position: fixed; top: max(3vh, env(safe-area-inset-top, 0px) + 12px); left: 4vw; z-index: 5;
+  font-family: var(--mono); font-size: 11px; letter-spacing: .5em; text-indent: 0;
+  color: var(--ink-dim); text-transform: uppercase; opacity: 0; transition: opacity .8s;
+  pointer-events: none;
+}
+#sound {
+  position: fixed; top: max(3vh, env(safe-area-inset-top, 0px) + 8px); right: 4vw; z-index: 5;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .35em; text-indent: .35em;
+  text-transform: uppercase; color: var(--ink-dim); background: none;
+  border: none; cursor: pointer; padding: 8px 4px;
+}
+#sound:hover { color: var(--vio); }
+#rail {
+  position: fixed; right: max(2.6vw, 18px); top: 50%; transform: translateY(-50%);
+  z-index: 4; display: flex; flex-direction: column; align-items: center; gap: 10px;
+  pointer-events: none; opacity: 0; transition: opacity .8s;
+}
+#rail .track { width: 1px; height: 30vh; background: linear-gradient(180deg, transparent, rgba(167,139,250,.5), transparent); position: relative; }
+#rail .dot {
+  position: absolute; left: 50%; transform: translate(-50%, -50%);
+  width: 7px; height: 7px; border-radius: 50%; background: var(--vio);
+  box-shadow: 0 0 12px rgba(167,139,250,.9);
+}
+#depth { font-family: var(--mono); font-size: 10px; letter-spacing: .2em; color: var(--ink-dim); writing-mode: vertical-rl; }
+
+/* Reduced motion / no-JS ---------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  #hint { animation: none; }
+}
+body.flat { height: auto; overflow-y: auto; }
+body.flat .scene {
+  position: relative; inset: auto; min-height: 100vh;
+  opacity: 1 !important; visibility: visible !important; transform: none !important;
+  pointer-events: auto;
+}
+body.flat .scene .act { pointer-events: auto; }
+body.flat #s1 .line { opacity: 1 !important; transform: none !important; }
+body.flat #rail, body.flat #hint { display: none; }
+noscript .ns {
+  position: fixed; inset: 0; z-index: 50; background: #030010;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  font-family: var(--mono); color: var(--ink); padding: 8vmin; line-height: 2.2;
+}
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+<div id="fallback"></div>
+
+<div id="brand">VOID</div>
+<button id="sound" aria-label="toggle sound">● sound</button>
+<div id="rail" aria-hidden="true">
+  <div class="track"><div class="dot" id="raildot"></div></div>
+  <div id="depth">12.0 rs</div>
+</div>
+
+<!-- s0 · arrival -->
+<section class="scene" id="s0" aria-label="VOID">
+  <h1>VOID</h1>
+  <div class="sub">a singularity on solana</div>
+  <div id="hint">scroll to fall</div>
+</section>
+
+<!-- s1 · the machine -->
+<section class="scene" id="s1" aria-label="how it works">
+  <p class="line">A law, not a promise: on a fixed timer, 1% of the sell-side liquidity is pulled — <b>and burned</b>.</p>
+  <p class="line">VOID leaves forever. <b>The SOL stays captured.</b></p>
+  <p class="line">Buy fees arrive in VOID — <b>burned too</b>. Sell fees arrive in SOL — fuel for new pools.</p>
+  <p class="line">No tax. No mint. No admin. <b>No stop.</b></p>
+</section>
+
+<!-- s2 · debris -->
+<section class="scene" id="s2" aria-label="live state">
+  <div class="debris">
+    <div class="stat" data-orbit="1">
+      <div class="k">supply remaining</div>
+      <div class="v"><span class="odo" id="odoSupply"></span> <span class="unit">VOID</span></div>
+    </div>
+    <div class="stat" data-orbit="2">
+      <div class="k">consumed</div>
+      <div class="v" id="vBurned">—</div>
+      <div class="note" id="vBurnedPct"></div>
+    </div>
+    <div class="stat" data-orbit="3">
+      <div class="k">next feeding</div>
+      <div class="v" id="vCountdown">—</div>
+    </div>
+  </div>
+  <div class="caption">the horizon grows with every burn</div>
+</section>
+
+<!-- s3 · the last light -->
+<section class="scene" id="s3" aria-label="contract address">
+  <div class="k">the last light to escape</div>
+  <div id="ca" class="pending act">genesis pending</div>
+  <button id="copy" class="act" hidden>copy</button>
+  <div class="warn">verify the contract address against official channels before touching anything</div>
+</section>
+
+<!-- s4 · inside -->
+<section class="scene" id="s4" aria-label="the void">
+  <div class="k">you are inside</div>
+  <div id="odoBig"><span class="odo" id="odoInside"></span></div>
+  <div class="of">of 100,000,000 · none will be minted again</div>
+  <p class="epitaph">No admin keys. No mint authority. No pause switch.<br>
+     Nothing that enters, returns.</p>
+  <nav id="links" class="act"></nav>
+  <div class="foot">voidsolana.com</div>
+</section>
+
+<noscript><div class="ns">VOID — a singularity on Solana.<br>Every six hours it burns 1% of its own liquidity, on-chain, forever.<br>Enable JavaScript to fall in.</div></noscript>
+
+<script>
+"use strict";
+/* ==========================================================================
+   CONFIG — the only block you should need to edit.
+   ========================================================================== */
+const CONFIG = {
+  // Flip to true at genesis (or let stats.json flip it for you).
+  live: false,
+
+  // Filled at launch. While empty, the CA panel shows "genesis pending".
+  ca:   "",
+  pool: "",
+
+  // Social links: leave "" to hide a button entirely.
+  links: {
+    telegram: "",                                // e.g. https://t.me/yourgroup
+    x:        "https://x.com/VOIDINSOL",
+    dune:     "",                                // your Dune dashboard
+  },
+
+  // Tokenomics constants (must match the chain).
+  INITIAL_SUPPLY: 100_000_000,
+  BASE_INTERVAL_S: 21_600,              // 6h; on-chain schedule adds +6h at 5/10/15% burned
+
+  // The bot will drop this file next to index.html every ~30s post-launch:
+  // { live, supply, burned, totalClaims, lastClaimTs, intervalSecs, mint, pool, updatedAt }
+  statsUrl: "stats.json",
+  statsPollS: 45,
+};
+
+/* ==========================================================================
+   State
+   ========================================================================== */
+const S = {
+  p: 0,            // smoothed fall progress 0..1
+  pTarget: 0,
+  burnedFrac: 0,   // fraction of supply destroyed (grows the horizon)
+  supply: CONFIG.INITIAL_SUPPLY,
+  burned: 0,
+  lastClaimTs: 0,
+  intervalSecs: CONFIG.BASE_INTERVAL_S,
+  live: CONFIG.live,
+  flare: 0,        // burn pulse 1 -> 0
+  t0: performance.now(),
+  reduced: matchMedia("(prefers-reduced-motion: reduce)").matches,
+};
+
+const qs = new URLSearchParams(location.search);
+if (qs.has("p")) S.pTarget = S.p = Math.min(Math.max(parseFloat(qs.get("p")) || 0, 0), 1);
+
+const $ = (id) => document.getElementById(id);
+const clamp = (x, a, b) => Math.min(Math.max(x, a), b);
+const lerp  = (a, b, t) => a + (b - a) * t;
+const easeIO = (t) => t * t * (3 - 2 * t);
+
+/* ==========================================================================
+   WebGL universe
+   ========================================================================== */
+const canvas = $("gl");
+const gl = canvas.getContext("webgl", { antialias: false, alpha: false, powerPreference: "high-performance" });
+
+const VERT = `
+attribute vec2 aP;
+void main(){ gl_Position = vec4(aP, 0.0, 1.0); }`;
+
+const FRAG = `
+precision highp float;
+uniform vec2  uRes;    // device px
+uniform vec2  uBH;     // black hole centre, device px (GL y-up)
+uniform float uT;      // seconds
+uniform float uP;      // fall progress 0..1
+uniform float uRS;     // shadow radius, device px
+uniform float uZoom;   // background magnification
+uniform float uFlare;  // burn pulse
+uniform float uQ;      // quality 0..1
+
+float h21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
+float n2(vec2 p){
+  vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+  return mix(mix(h21(i), h21(i+vec2(1,0)), f.x), mix(h21(i+vec2(0,1)), h21(i+vec2(1,1)), f.x), f.y);
+}
+float fbm(vec2 p){
+  float a = 0.5, s = 0.0;
+  for(int i = 0; i < 5; i++){ s += a*n2(p); p = p*2.03 + 17.7; a *= 0.55; }
+  return s;
+}
+
+mat2 rot2(float a){ float s = sin(a), c = cos(a); return mat2(c, -s, s, c); }
+
+/* Infalling worlds — other tokens, other pools, all captured. Each spirals in
+   from the edge, flattens into the disk plane as gravity wins, gets tidally
+   stretched along its fall line, and vanishes past the shadow. */
+vec3 planets(vec2 c, float shadowR, float redshift){
+  vec3 acc = vec3(0.0);
+  for(int i = 0; i < 4; i++){
+    float fi = float(i);
+    float period = 34.0 + fi*13.0;
+    float seed = h21(vec2(fi*7.31, fi*3.77));
+    float phase = fract(uT/period + seed);
+    float rad = mix(0.95, shadowR*0.7, pow(phase, 1.7));
+    float ang = seed*6.2831 + phase*(4.0 + seed*2.0) + 2.5*pow(phase, 3.0);
+    float flat_ = mix(1.0, 0.30, smoothstep(0.35, 0.9, phase)); // captured into the disk plane
+    vec2 ppos = rot2(-0.20) * (vec2(cos(ang), sin(ang)*flat_) * rad);
+    vec2 local = c - ppos;
+    vec2 rdir = normalize(ppos + vec2(1e-4, 0.0));
+    float lr = dot(local, rdir);
+    float lt = dot(local, vec2(-rdir.y, rdir.x));
+    float prox = smoothstep(0.55, 0.95, phase);
+    vec2 tide = vec2(lr/(1.0 + prox*6.0), lt*(1.0 + prox*1.5)); // spaghettification
+    float prad = (0.020 + seed*0.020) * (1.0 - 0.35*phase);
+    float d = length(tide);
+    float body = smoothstep(prad, prad*0.72, d);
+    if (body <= 0.001) continue;
+    // lit from the hole's side: the disk is the only sun out here
+    float shade = clamp(0.30 + 0.85*(0.5 - lr/(2.0*prad)), 0.12, 1.2);
+    vec3 base = i == 0 ? vec3(0.25, 0.80, 0.72) : i == 1 ? vec3(1.00, 0.68, 0.28)
+              : i == 2 ? vec3(0.38, 0.52, 1.00) : vec3(0.95, 0.45, 0.75);
+    base = mix(base, vec3(1.0, 0.45, 0.18), redshift*0.6);
+    float born = smoothstep(0.0, 0.06, phase);
+    float gone = smoothstep(shadowR*0.95, shadowR*1.35, rad);
+    acc += base * body * shade * born * gone;
+    // violet rim light
+    float rim = smoothstep(prad*0.9, prad, d) * (1.0 - smoothstep(prad, prad*1.25, d));
+    acc += vec3(0.6, 0.4, 1.0) * rim * 0.5 * born * gone;
+  }
+  return acc;
+}
+
+vec3 starLayer(vec2 p, float density, float size, float thresh){
+  vec2 g = floor(p*density), f = fract(p*density) - 0.5;
+  float rnd = h21(g);
+  vec2 off = vec2(h21(g + 1.37), h21(g + 7.71)) - 0.5;
+  float d = length(f - off*0.8);
+  float m = smoothstep(size, 0.0, d) * step(thresh, rnd);
+  float tw = 0.55 + 0.45*sin(uT*(1.0 + rnd*3.0) + rnd*40.0);
+  return vec3(m * tw);
+}
+
+vec3 background(vec2 w, vec2 rdir, float streak){
+  vec3 col = vec3(0.0);
+  // radial motion blur while falling: average samples along the fall direction
+  for(int i = 0; i < 3; i++){
+    vec2 sp = w + rdir * streak * float(i) * 0.013;
+    col += starLayer(sp, 13.0, 0.055, 0.78);
+    col += starLayer(sp, 31.0, 0.040, 0.82) * 0.65;
+    col += starLayer(sp, 67.0, 0.032, 0.85) * 0.38;
+  }
+  col /= 3.0;
+  // violet nebulae
+  float n  = fbm(w*2.4 + vec2(3.1, 7.2));
+  float n2_ = fbm(w*1.1 - vec2(1.0, 2.0));
+  col += vec3(0.30, 0.12, 0.55) * pow(n, 2.6) * 1.15;
+  col += vec3(0.09, 0.04, 0.28) * pow(n2_, 2.0) * 0.9;
+  return col;
+}
+
+void main(){
+  vec2 frag = gl_FragCoord.xy;
+  vec2 c    = (frag - uBH) / uRes.y;         // BH-centred, aspect-safe
+  float rs  = uRS / uRes.y;
+  float r   = length(c);
+  vec2 dir  = r > 1e-5 ? c/r : vec2(1.0, 0.0);
+
+  // -- gravitational lensing (impulse approximation) ----------------------
+  // Deflection ~ 1/b pulls background light around the hole; sampled radius
+  // goes negative near the photon sphere => opposite-side (Einstein) imaging.
+  float A   = 1.9 * rs * rs;
+  float sr  = r - A / max(r, 1e-4);
+  vec2 sp   = dir * sr;
+  float shadowR = sqrt(A);
+
+  vec2 w = sp / uZoom + vec2(uT*0.004, uT*0.0016);   // slow cosmic drift
+  float streak = smoothstep(0.5, 1.0, uP) * (1.6 / max(r, 0.22));
+  vec3 col = background(w, dir, streak);
+
+  // faint secondary image ringing the photon sphere
+  float ringZone = exp(-abs(r - shadowR) * (8.0 / max(rs, 1e-3)));
+  col = mix(col, background(-w*0.97, dir, streak), clamp(ringZone*0.55, 0.0, 0.55));
+
+  // -- the final act: layers die in order, reddening as they go ------------
+  // The sky goes first, then the disk, and the photon ring outlives them all,
+  // gravitationally redshifted from violet to ember before the dark takes it.
+  float fadeBG   = 1.0 - smoothstep(0.78, 0.90, uP);
+  float fadeDisk = 1.0 - smoothstep(0.86, 0.96, uP);
+  float fadeRing = 1.0 - smoothstep(0.94, 0.995, uP);
+  float redshift = smoothstep(0.80, 0.95, uP);
+  col *= fadeBG;
+
+  // -- accretion disk (tilted a few degrees — the old logo's skew) ---------
+  vec2 rc = rot2(-0.20) * c;
+  {
+    float incl = 3.3;                          // inclination squash
+    vec2 d  = vec2(rc.x, rc.y*incl);
+    float rd  = length(d);
+    float ang = atan(d.y, d.x);
+    float rIn = shadowR*1.10, rOut = shadowR*3.4;
+    if (rd < rOut*1.25) {
+      float band = smoothstep(rIn*0.97, rIn*1.2, rd) * (1.0 - smoothstep(rOut*0.7, rOut, rd));
+      float speed = 2.1 / max(pow(rd/shadowR, 1.5), 0.3);   // Keplerian-ish shear
+      float sw  = fbm(vec2(ang*3.0 + uT*speed,        rd*22.0/shadowR));
+      float sw2 = uQ > 0.5 ? fbm(vec2(ang*7.0 - uT*speed*1.7, rd*40.0/shadowR)) : 0.5;
+      float bright = pow(clamp(rIn/rd, 0.0, 1.0), 1.6) * (0.45 + 0.9*sw) * (0.55 + 0.6*sw2);
+      float dopp = 1.0 + 0.9*(d.x/max(rd, 1e-4));           // beamed approach side
+      // near side (below centre) always visible; far side only outside ~2rs
+      float front = smoothstep(0.15*shadowR, -0.30*shadowR, rc.y);
+      float farOK = smoothstep(shadowR*1.9, shadowR*2.4, rd);
+      float vis   = max(front, farOK);
+      vec3 dc = mix(vec3(0.42, 0.20, 0.90), vec3(1.0, 0.93, 1.0), clamp(bright*1.25 - 0.12, 0.0, 1.0));
+      dc = mix(dc, vec3(1.0, 0.50, 0.16), redshift*0.85);   // violet -> ember as the dark comes
+      col += dc * band * bright * dopp * vis * (1.55 + uFlare*2.0 + redshift*0.8) * fadeDisk;
+
+      // lensed "hat": far side of the disk bent over the top of the shadow
+      vec2  m    = vec2(rc.x, abs(rc.y));
+      float arcR = length(vec2(m.x, m.y*1.15));
+      float arc  = exp(-pow((arcR - shadowR*1.22)/(shadowR*0.16), 2.0));
+      float mang = atan(m.y*incl, m.x);
+      float msw  = fbm(vec2(mang*3.0 + uT*1.8, 6.0));
+      vec3 hatc = mix(vec3(0.78, 0.58, 1.0), vec3(1.0, 0.55, 0.20), redshift*0.85);
+      col += hatc * arc * (0.32 + 0.45*msw) * smoothstep(0.0, shadowR*0.6, rc.y) * fadeDisk;
+    }
+  }
+
+  // -- infalling worlds ------------------------------------------------------
+  col += planets(c, shadowR, redshift) * fadeDisk;
+
+  // -- photon ring: the last light. Swells and reddens before it dies. -----
+  float pr = exp(-abs(r - shadowR*1.03) * (40.0 / max(rs, 1e-3)));
+  vec3 ringCol = mix(vec3(0.85, 0.70, 1.0), vec3(1.0, 0.52, 0.16), redshift);
+  col += ringCol * pr * (1.15 + uFlare*4.0 + redshift*1.6) * fadeRing;
+
+  // -- the shadow ----------------------------------------------------------
+  float inside = 1.0 - smoothstep(shadowR*0.90, shadowR*1.0, r);
+  col *= 1.0 - inside;
+
+  // Horizon crossing is handled per-layer above (fadeBG/fadeDisk/fadeRing),
+  // so the ring outlives the sky instead of everything dying at once.
+
+  // vignette + grain + tone
+  vec2 uv = frag / uRes;
+  col *= 1.0 - 0.45 * pow(length(uv - 0.5) * 1.35, 2.0);
+  col += (h21(frag + fract(uT)*13.0) - 0.5) * (0.010 + 0.028*fadeBG);
+  gl_FragColor = vec4(pow(max(col, 0.0), vec3(0.85)), 1.0);
+}`;
+
+let prog = null, uni = {}, dpr = Math.min(devicePixelRatio || 1, 2);
+
+function buildGL() {
+  if (!gl) { document.body.classList.add("nogl"); return false; }
+  const sh = (type, src) => {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      console.error(gl.getShaderInfoLog(s));
+      return null;
+    }
+    return s;
+  };
+  const v = sh(gl.VERTEX_SHADER, VERT), f = sh(gl.FRAGMENT_SHADER, FRAG);
+  if (!v || !f) { document.body.classList.add("nogl"); return false; }
+  prog = gl.createProgram();
+  gl.attachShader(prog, v); gl.attachShader(prog, f); gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    console.error(gl.getProgramInfoLog(prog));
+    document.body.classList.add("nogl"); return false;
+  }
+  gl.useProgram(prog);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+  const aP = gl.getAttribLocation(prog, "aP");
+  gl.enableVertexAttribArray(aP);
+  gl.vertexAttribPointer(aP, 2, gl.FLOAT, false, 0, 0);
+  for (const n of ["uRes","uBH","uT","uP","uRS","uZoom","uFlare","uQ"]) uni[n] = gl.getUniformLocation(prog, n);
+  return true;
+}
+
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  canvas.style.width = w + "px";
+  canvas.style.height = h + "px";
+  if (gl && prog) gl.viewport(0, 0, canvas.width, canvas.height);
+}
+addEventListener("resize", resize);
+
+/* Camera: where the hole sits and how big it looms, as a function of fall */
+function camera() {
+  const e = easeIO(S.p);
+  const w = innerWidth, h = innerHeight;
+  const x = lerp(0.63, 0.5, e) * w;
+  const y = lerp(0.44, 0.5, e) * h;
+  const minD = Math.min(w, h);
+  // horizon radius: grows with fall AND permanently with burned fraction
+  const rs = minD * (0.055 + 0.035 * S.burnedFrac) * (1 + 3.0 * e * e) * dpr;
+  return {
+    bhCssX: x, bhCssY: y,
+    bhGlX: x * dpr, bhGlY: canvas.height - y * dpr,
+    rs,
+    zoom: lerp(1.0, 3.4, e),
+  };
+}
+
+/* Adaptive quality: if frames run long, shed resolution before shedding fx */
+let emaDt = 16, slowFrames = 0, quality = 1;
+function adapt(dt) {
+  emaDt = emaDt * 0.95 + dt * 0.05;
+  if (emaDt > 26 && ++slowFrames > 90) {
+    slowFrames = 0;
+    if (dpr > 0.75) { dpr = Math.max(0.6, dpr * 0.8); resize(); }
+    else quality = 0;
+  }
+}
+if (qs.get("fx") === "low") { dpr = Math.min(dpr, 1); quality = 0; }
+
+/* ==========================================================================
+   Scenes
+   ========================================================================== */
+// [start, fadeInEnd, fadeOutStart, end] in fall progress
+const SCENES = [
+  { el: $("s0"), r: [0.00, 0.02, 0.07, 0.13] },
+  { el: $("s1"), r: [0.14, 0.19, 0.33, 0.40] },
+  { el: $("s2"), r: [0.41, 0.46, 0.57, 0.63] },
+  { el: $("s3"), r: [0.65, 0.70, 0.77, 0.83] },
+  // 0.83 -> 0.93 is deliberately empty: the last-light act. The sky dies, the
+  // disk reddens and goes, and the ring burns ember on near-black. No text.
+  { el: $("s4"), r: [0.93, 0.98, 1.01, 1.02] },
+];
+
+/* Split lore lines into per-letter spans so gravity can shred them */
+const stretchables = [];
+for (const line of document.querySelectorAll("#s1 .line")) {
+  const walk = (node) => {
+    if (node.nodeType === 3) {
+      const frag = document.createDocumentFragment();
+      for (const ch of node.textContent) {
+        const s = document.createElement("span");
+        s.className = "ch";
+        s.textContent = ch === " " ? " " : ch;
+        frag.appendChild(s);
+      }
+      node.replaceWith(frag);
+    } else if (node.nodeType === 1) {
+      [...node.childNodes].forEach(walk);
+    }
+  };
+  [...line.childNodes].forEach(walk);
+  stretchables.push(line);
+}
+
+function sceneLocal(range, p) {
+  const [a, b, c, d] = range;
+  if (p <= a || p >= d) return { vis: 0, exit: 0 };
+  const vis = p < b ? (p - a) / (b - a) : p > c ? 1 - (p - c) / (d - c) : 1;
+  const exit = p > c ? (p - c) / (d - c) : 0;
+  return { vis: clamp(vis, 0, 1), exit: clamp(exit, 0, 1) };
+}
+
+function updateScenes(cam) {
+  for (const sc of SCENES) {
+    const { vis, exit } = sceneLocal(sc.r, S.p);
+    const on = vis > 0.001;
+    sc.el.classList.toggle("on", on);
+    if (!on) { sc.el.style.opacity = 0; continue; }
+    sc.el.style.opacity = vis;
+
+    if (sc.el.id === "s1") {
+      // lines appear sequentially inside the scene window
+      const [a, , c] = sc.r;
+      const lines = sc.el.querySelectorAll(".line");
+      const span = (c - a) / lines.length;
+      lines.forEach((ln, i) => {
+        const lt = clamp((S.p - (a + i * span * 0.8)) / (span * 0.6), 0, 1);
+        ln.style.opacity = lt;
+        ln.style.transform = `translateY(${(1 - lt) * 26}px)`;
+      });
+      // spaghettification on exit: drag every letter toward the hole
+      if (exit > 0.01) spaghettify(sc.el, cam, exit);
+      else if (sc.el._shredded) unshred(sc.el);
+    }
+
+    if (sc.el.id === "s2") {
+      // debris drifts on slow elliptical orbits
+      const t = (performance.now() - S.t0) / 1000;
+      sc.el.querySelectorAll(".stat").forEach((st, i) => {
+        const ph = i * 2.1;
+        st.style.transform =
+          `translate(${Math.sin(t * 0.35 + ph) * 14}px, ${Math.cos(t * 0.28 + ph) * 9}px)`;
+      });
+      if (exit > 0.01) spaghettify(sc.el, cam, exit, ".stat");
+      else if (sc.el._shredded) unshred(sc.el);
+    }
+
+    if (sc.el.id === "s3" && exit > 0.01) {
+      sc.el.style.transform = `scale(${1 - exit * 0.25})`;
+      sc.el.style.filter = `blur(${exit * 6}px)`;
+    } else if (sc.el.id === "s3") {
+      sc.el.style.transform = ""; sc.el.style.filter = "";
+    }
+  }
+
+  // HUD
+  const past0 = S.p > 0.10;
+  $("brand").style.opacity = past0 && S.p < 0.90 ? 1 : 0;
+  $("rail").style.opacity = past0 && S.p < 0.90 ? 1 : 0;
+  const rsDist = S.p < 0.90 ? lerp(12, 1, easeIO(S.p / 0.90)) : 1;
+  $("depth").textContent = S.p >= 0.90 ? "∅" : rsDist.toFixed(1) + " rs";
+  $("raildot").style.top = `${clamp(S.p / 0.90, 0, 1) * 100}%`;
+}
+
+function spaghettify(scene, cam, e, sel = ".ch") {
+  scene._shredded = true;
+  const cx = cam.bhCssX, cy = cam.bhCssY;
+  const k = easeIO(e);
+  for (const el of scene.querySelectorAll(sel)) {
+    if (!el._rect || e < 0.05) el._rect = el.getBoundingClientRect();
+    const r = el._rect;
+    const ex = r.left + r.width / 2, ey = r.top + r.height / 2;
+    const dx = cx - ex, dy = cy - ey;
+    const ang = Math.atan2(dy, dx);
+    el.style.transform =
+      `translate(${dx * k * 0.85}px, ${dy * k * 0.85}px) ` +
+      `rotate(${ang}rad) scaleX(${1 + k * 6}) scaleY(${Math.max(1 - k * 0.9, 0.08)})`;
+    el.style.opacity = 1 - k;
+  }
+}
+function unshred(scene) {
+  scene._shredded = false;
+  for (const el of scene.querySelectorAll(".ch, .stat")) {
+    if (el.classList.contains("stat")) continue; // orbits own its transform
+    el.style.transform = ""; el.style.opacity = "";
+    el._rect = null;
+  }
+}
+
+/* ==========================================================================
+   Odometers (digits that only roll down)
+   ========================================================================== */
+function makeOdo(el, digits) {
+  el.innerHTML = "";
+  const cols = [];
+  for (let i = 0; i < digits; i++) {
+    if (i > 0 && (digits - i) % 3 === 0) {
+      const sep = document.createElement("span");
+      sep.className = "sep"; sep.textContent = ",";
+      el.appendChild(sep);
+    }
+    const col = document.createElement("span");
+    col.className = "col";
+    const stack = document.createElement("span");
+    stack.textContent = "0123456789".split("").join("\n");
+    stack.style.whiteSpace = "pre-line";
+    col.appendChild(stack);
+    el.appendChild(col);
+    cols.push(stack);
+  }
+  return (value) => {
+    const s = String(Math.max(Math.round(value), 0)).padStart(digits, "0");
+    cols.forEach((stack, i) => {
+      stack.style.transform = `translateY(${-Number(s[i]) * 1.18}em)`;
+    });
+  };
+}
+const setOdoSupply = makeOdo($("odoSupply"), 9);
+const setOdoInside = makeOdo($("odoInside"), 9);
+
+/* ==========================================================================
+   Live data
+   ========================================================================== */
+const fmtInt = (n) => Math.round(n).toLocaleString("en-US");
+
+function applyStats(d) {
+  const prevBurned = S.burned;
+  if (typeof d.supply === "number") S.supply = d.supply;
+  if (typeof d.burned === "number") S.burned = d.burned;
+  if (typeof d.lastClaimTs === "number") S.lastClaimTs = d.lastClaimTs;
+  if (typeof d.intervalSecs === "number") S.intervalSecs = d.intervalSecs;
+  if (d.live === true) S.live = true;
+  if (d.mint && !CONFIG.ca) CONFIG.ca = d.mint;
+  S.burnedFrac = clamp(S.burned / CONFIG.INITIAL_SUPPLY, 0, 1);
+
+  if (S.burned > prevBurned && prevBurned > 0) S.flare = 1;  // witnessed a feeding
+
+  setOdoSupply(S.supply);
+  setOdoInside(S.supply);
+  $("vBurned").innerHTML = `${fmtInt(S.burned)} <span class="unit">VOID</span>`;
+  $("vBurnedPct").textContent =
+    `${(S.burnedFrac * 100).toFixed(3)}% of everything that will ever exist`;
+  renderCA();
+}
+
+function renderCA() {
+  const ca = $("ca"), copy = $("copy");
+  if (S.live && CONFIG.ca) {
+    ca.textContent = CONFIG.ca;
+    ca.classList.remove("pending");
+    copy.hidden = false;
+  } else {
+    ca.textContent = "genesis pending";
+    ca.classList.add("pending");
+    copy.hidden = true;
+  }
+}
+
+$("copy").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(CONFIG.ca);
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = CONFIG.ca; document.body.appendChild(ta);
+    ta.select(); document.execCommand("copy"); ta.remove();
+  }
+  $("copy").textContent = "copied";
+  setTimeout(() => ($("copy").textContent = "copy"), 1600);
+});
+
+function tickCountdown() {
+  const el = $("vCountdown");
+  if (!S.live || !S.lastClaimTs) { el.textContent = "awaiting genesis"; return; }
+  const left = S.lastClaimTs + S.intervalSecs - Math.floor(Date.now() / 1000);
+  if (left <= 0) { el.textContent = "imminent"; return; }
+  const h = String(Math.floor(left / 3600)).padStart(2, "0");
+  const m = String(Math.floor((left % 3600) / 60)).padStart(2, "0");
+  const s = String(left % 60).padStart(2, "0");
+  el.textContent = `${h}:${m}:${s}`;
+}
+setInterval(tickCountdown, 1000);
+
+async function pollStats() {
+  try {
+    const res = await fetch(CONFIG.statsUrl, { cache: "no-store" });
+    if (res.ok) applyStats(await res.json());
+  } catch { /* pre-launch or offline: defaults stand */ }
+}
+setInterval(pollStats, CONFIG.statsPollS * 1000);
+
+/* Links: only render what exists */
+{
+  const nav = $("links");
+  const add = (label, href, primary = false) => {
+    if (!href) return;
+    const a = document.createElement("a");
+    a.textContent = label; a.href = href;
+    // Internal pages navigate in place — opening the paper in a new tab would
+    // leave the fall running (and rumbling) behind it.
+    if (/^https?:/i.test(href)) { a.target = "_blank"; a.rel = "noopener"; }
+    if (primary) a.className = "primary";
+    nav.appendChild(a);
+  };
+  const jup = CONFIG.ca ? `https://jup.ag/swap/SOL-${CONFIG.ca}` : "";
+  const dex = CONFIG.pool ? `https://dexscreener.com/solana/${CONFIG.pool}` : "";
+  add("enter", jup, true);
+  add("paper", "paper.html");
+  add("telegram", CONFIG.links.telegram);
+  add("x", CONFIG.links.x);
+  add("dune", CONFIG.links.dune);
+  add("chart", dex);
+  if (!nav.children.length) {
+    const span = document.createElement("a");
+    span.textContent = "genesis pending";
+    span.href = "#"; span.style.pointerEvents = "none"; span.style.color = "var(--ink-dim)";
+    nav.appendChild(span);
+  }
+}
+
+/* ==========================================================================
+   Sound: a distant rumble that swells as you fall. Generated, no assets.
+   ========================================================================== */
+/* On by default, but the choice is remembered and SHARED with paper.html —
+   `storage` events fire in other tabs, so muting on either page mutes both. */
+const SOUND_KEY = "void.sound";
+let audio = null;
+let audioOn = localStorage.getItem(SOUND_KEY) !== "off";
+function buildAudio() {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const len = ctx.sampleRate * 2;
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const ch = buf.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < len; i++) {              // brown noise
+    const white = Math.random() * 2 - 1;
+    last = (last + 0.02 * white) / 1.02;
+    ch[i] = last * 3.5;
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = buf; src.loop = true;
+  const lp = ctx.createBiquadFilter();
+  lp.type = "lowpass"; lp.frequency.value = 110; lp.Q.value = 0.7;
+  const gain = ctx.createGain(); gain.gain.value = 0;
+  src.connect(lp).connect(gain).connect(ctx.destination);
+  src.start();
+  return { ctx, gain, lp };
+}
+/* Browsers only release audio on a real user gesture, so "on by default"
+   means: arm on the first gesture of any kind and keep retrying cheaply
+   (resume() is a no-op once running). Wheel/scroll don't count as activation
+   in some browsers — the first click or keypress catches those users. */
+function tryStartAudio() {
+  if (!audioOn) return;
+  if (!audio) audio = buildAudio();
+  if (audio.ctx.state === "suspended") audio.ctx.resume();
+}
+for (const ev of ["pointerdown", "touchend", "keydown", "wheel", "scroll"]) {
+  addEventListener(ev, tryStartAudio, { passive: true });
+}
+function paintSound() { $("sound").textContent = audioOn ? "● sound" : "◦ sound"; }
+$("sound").addEventListener("click", () => {
+  audioOn = !audioOn;
+  localStorage.setItem(SOUND_KEY, audioOn ? "on" : "off");
+  if (audioOn) tryStartAudio();
+  paintSound();
+});
+addEventListener("storage", (e) => {
+  if (e.key !== SOUND_KEY) return;
+  audioOn = e.newValue !== "off";
+  if (audioOn) tryStartAudio();
+  paintSound();
+});
+paintSound();
+
+/* ==========================================================================
+   Main loop
+   ========================================================================== */
+let lastT = performance.now();
+
+function frame(now) {
+  const dt = Math.min(now - lastT, 100);
+  lastT = now;
+
+  // scroll -> smoothed progress
+  const max = document.body.scrollHeight - innerHeight;
+  if (max > 0 && !qs.has("p")) S.pTarget = clamp(scrollY / max, 0, 1);
+  S.p += (S.pTarget - S.p) * (1 - Math.exp(-dt * 0.004));
+  S.flare = Math.max(S.flare - dt * 0.0006, 0);
+
+  const cam = camera();
+
+  if (prog && !document.hidden) {
+    const t = (now - S.t0) / 1000;
+    gl.uniform2f(uni.uRes, canvas.width, canvas.height);
+    gl.uniform2f(uni.uBH, cam.bhGlX, cam.bhGlY);
+    gl.uniform1f(uni.uT, t);
+    gl.uniform1f(uni.uP, S.p);
+    gl.uniform1f(uni.uRS, cam.rs);
+    gl.uniform1f(uni.uZoom, cam.zoom);
+    gl.uniform1f(uni.uFlare, S.flare);
+    gl.uniform1f(uni.uQ, quality);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    adapt(dt);
+  }
+
+  if (!document.body.classList.contains("flat")) updateScenes(cam);
+
+  if (audio) {
+    const target = audioOn ? 0.05 + easeIO(S.p) * 0.30 : 0;
+    audio.gain.gain.value += (target - audio.gain.gain.value) * 0.04;
+    audio.lp.frequency.value = 110 + easeIO(S.p) * 160;
+  }
+
+  requestAnimationFrame(frame);
+}
+
+/* ==========================================================================
+   Boot
+   ========================================================================== */
+if (S.reduced) {
+  // Motion-sensitive visitors get the content as a calm, scrollable column.
+  document.body.classList.add("flat");
+}
+canvas.addEventListener("webglcontextlost", (e) => {
+  e.preventDefault();
+  document.body.classList.add("nogl");
+});
+
+applyStats({});           // defaults (pre-launch)
+tickCountdown();
+pollStats();
+buildGL();
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
