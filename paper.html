@@ -622,8 +622,23 @@ const LOWQ = COARSE;
 const dpr = Math.min(devicePixelRatio || 1, LOWQ ? 1 : 1.5);
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+/* Same reasoning as index.html: no-hardware-acceleration browsers often still
+   hand back a working WebGL context backed by a CPU rasterizer, which would
+   make this background shader crawl instead of failing cleanly. Bail to the
+   plain gradient CSS already sitting under the canvas. */
+function isSoftwareRenderer() {
+  try {
+    const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+    if (!dbg) return false;
+    const renderer = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || "").toLowerCase();
+    return /swiftshader|llvmpipe|software|basic render|warp/.test(renderer);
+  } catch {
+    return false;
+  }
+}
+
 function boot() {
-  if (!gl) return false;
+  if (!gl || isSoftwareRenderer()) return false;
   const sh = (type, src) => {
     const s = gl.createShader(type);
     gl.shaderSource(s, src); gl.compileShader(s);

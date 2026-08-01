@@ -607,8 +607,39 @@ const LOWQ = COARSE || qs.get("fx") === "low";
 let prog = null, uni = {};
 let dpr = Math.min(devicePixelRatio || 1, LOWQ ? 1.25 : 2);
 
+/* 45fps, not 30: on a 240Hz panel a 30fps idle throttle reads as visibly
+   stuttery next to the buttery scroll it just came from, even though nothing
+   but slow drift is happening. 45 is the point where a big refresh-rate jump
+   stops being obvious. Used for BOTH the idle throttle and the final fps-drop
+   rung of the slow-hardware ladder (resolution -> this -> freeze). */
+const REDUCED_MS = 1000 / 45;
+
+/*
+ * "No hardware acceleration" does NOT reliably make WebGL context creation
+ * fail — Chrome/Firefox both fall back to a CPU rasterizer (SwiftShader /
+ * llvmpipe / WARP) and hand back a context that looks completely normal to
+ * this code. A full-screen fragment shader this dense on a CPU rasterizer
+ * commonly runs at 1-5fps, not "slow" but genuinely unusable — and the
+ * adaptive quality ladder in adapt() needs ~20 consecutive bad frames per
+ * rung to react, which at 2fps is TEN SECONDS of a near-frozen page before
+ * it even starts helping. That first impression is worse than never trying.
+ * So: ask the context what it's actually running on, and if it's a known
+ * software rasterizer, skip straight to the static CSS fallback — same
+ * codepath as WebGL being entirely unavailable.
+ */
+function isSoftwareRenderer() {
+  try {
+    const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+    if (!dbg) return false; // some browsers block this for fingerprinting — can't tell, so don't guess
+    const renderer = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || "").toLowerCase();
+    return /swiftshader|llvmpipe|software|basic render|warp/.test(renderer);
+  } catch {
+    return false;
+  }
+}
+
 function buildGL() {
-  if (!gl) { document.body.classList.add("nogl"); return false; }
+  if (!gl || isSoftwareRenderer()) { document.body.classList.add("nogl"); return false; }
   const sh = (type, src) => {
     const s = gl.createShader(type);
     gl.shaderSource(s, src); gl.compileShader(s);
@@ -683,7 +714,7 @@ function adapt(drawDelta) {
     if (++slowFrames > 20) {
       slowFrames = 0;
       if (dpr > 0.5) { dpr = Math.max(0.5, dpr * 0.8); resize(); }
-      else if (frameBudget === 0) frameBudget = 33;                    // 30fps
+      else if (frameBudget === 0) frameBudget = REDUCED_MS;
       else if (frozenT < 0) frozenT = (performance.now() - S.t0) / 1000;
     }
   } else {
@@ -1050,7 +1081,7 @@ function frame(now) {
      144 times a second to animate almost nothing. That is the fan noise. */
   if (Math.abs(S.p - lastMotionP) > 0.0004) { lastMotionP = S.p; lastMotionT = now; }
   const idle = now - lastMotionT > 1200;
-  const budget = Math.max(frameBudget, idle ? 33 : 0);
+  const budget = Math.max(frameBudget, idle ? REDUCED_MS : 0);
 
   if (prog && !document.hidden && drawDelta >= budget && stale) {
     const t = frozenT >= 0 ? frozenT : (now - S.t0) / 1000;
