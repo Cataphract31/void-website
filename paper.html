@@ -637,8 +637,11 @@ function isSoftwareRenderer() {
   }
 }
 
+// ?nogl=1 previews the fallback background on any machine.
+const qs = new URLSearchParams(location.search);
+
 function boot() {
-  if (!gl || isSoftwareRenderer()) return false;
+  if (!gl || isSoftwareRenderer() || qs.get("nogl") === "1") return false;
   const sh = (type, src) => {
     const s = gl.createShader(type);
     gl.shaderSource(s, src); gl.compileShader(s);

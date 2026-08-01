@@ -34,17 +34,106 @@ body { height: 800vh; overflow-x: hidden; }
 /* The universe ---------------------------------------------------------- */
 #gl, #fallback {
   position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh;
-  display: block; z-index: 0;
+  display: block; z-index: 0; overflow: hidden;
 }
-#fallback {
-  display: none;
-  background:
-    radial-gradient(ellipse 80% 55% at 62% 45%, rgba(120,70,220,.28), transparent 60%),
-    radial-gradient(circle at 62% 45%, #000 0 9vmin, rgba(167,139,250,.5) 9.6vmin, transparent 11vmin),
-    #030010;
-}
+#fallback { display: none; background: #030010; }
 body.nogl #gl { display: none; }
 body.nogl #fallback { display: block; }
+
+/* ==========================================================================
+   NO-WEBGL FALLBACK — a hand-built CSS singularity, not a broken version of
+   the shader. Shown when WebGL is unavailable or a software rasterizer is
+   detected (see isSoftwareRenderer()). Same visual language — violet halo,
+   spinning accretion disk, photon ring, black core, drifting motes standing
+   in for the infalling planets — but built entirely from layered gradients
+   and TRANSFORM-ONLY animations, which the compositor handles for free. That
+   matters here specifically: this path exists for the weakest hardware, so
+   it has to be cheaper than the thing it's replacing, not just simpler-
+   looking. Tied to real scroll progress via --fall/--burn, set once per
+   frame from the same S.p / S.burnedFrac the shader itself reads — see the
+   nogl branch in frame(). Zero DOM/CSS cost for the other 99% of visitors:
+   #fallback stays display:none until body.nogl is set.
+   ========================================================================== */
+#fallback .fb-stars {
+  position: absolute; inset: -15%;
+  background-image:
+    radial-gradient(1px 1px at 10% 20%, #fff, transparent 60%),
+    radial-gradient(1px 1px at 80% 10%, #fff, transparent 60%),
+    radial-gradient(1.5px 1.5px at 40% 70%, #fff, transparent 60%),
+    radial-gradient(1px 1px at 60% 85%, #fff, transparent 60%),
+    radial-gradient(1px 1px at 90% 55%, #fff, transparent 60%),
+    radial-gradient(1.5px 1.5px at 25% 45%, #fff, transparent 60%),
+    radial-gradient(1px 1px at 15% 92%, #fff, transparent 60%),
+    radial-gradient(1px 1px at 70% 35%, #fff, transparent 60%);
+  background-size: 360px 360px;
+  opacity: .45;
+  animation: fbTwinkle 5s ease-in-out infinite alternate;
+}
+#fallback .fb-stage {
+  position: absolute; top: 50%; left: 62%;
+  width: min(155vmin, 1500px); aspect-ratio: 1;
+  transform: translate(-50%, -50%) rotate(-11deg)
+             scale(calc(1 + var(--burn, 0) * 0.5 + var(--fall, 0) * var(--fall, 0) * 2.4));
+  transition: transform .5s ease-out;
+}
+#fallback .fb-halo {
+  position: absolute; inset: -16%; border-radius: 50%;
+  background: radial-gradient(circle, rgba(120,70,220,.32) 0%, rgba(90,45,190,.14) 42%, transparent 68%);
+  filter: blur(28px);
+}
+#fallback .fb-disk {
+  position: absolute; inset: 4%; border-radius: 50%;
+  background: conic-gradient(from 210deg,
+    transparent 0deg, rgba(167,139,250,.55) 42deg, rgba(255,138,60,.36) 88deg,
+    rgba(167,139,250,.22) 140deg, transparent 205deg, rgba(150,110,255,.36) 290deg,
+    rgba(255,150,80,.18) 330deg, transparent 360deg);
+  filter: blur(44px);
+  animation: fbSpin 140s linear infinite;
+}
+#fallback .fb-ring {
+  position: absolute; inset: 28%; border-radius: 50%;
+  border: 1px solid rgba(200,175,255,.6);
+  box-shadow:
+    0 0 70px 10px rgba(167,139,250,.32),
+    0 0 160px 30px rgba(120,70,220,.16),
+    inset 0 0 60px rgba(167,139,250,.16);
+  animation: fbPulse 10s ease-in-out infinite;
+}
+#fallback .fb-core {
+  position: absolute; inset: 28.6%; border-radius: 50%; background: #000;
+  box-shadow: 0 0 90px 46px #000, 0 0 200px 90px rgba(0,0,0,.92);
+}
+/* Motes: the shader's infalling planets, approximated as three drifting
+   points of light on staggered loops — cheap (transform + opacity only). */
+#fallback .fb-mote {
+  position: absolute; top: 50%; left: 62%;
+  width: 7px; height: 7px; border-radius: 50%; opacity: 0;
+  box-shadow: 0 0 10px 2px currentColor;
+}
+#fallback .fb-mote.a { color: #40cdb8; animation: fbFall 10s linear infinite; }
+#fallback .fb-mote.b { color: #ffae47; animation: fbFall 13s linear infinite 4s; }
+#fallback .fb-mote.c { color: #6f8fff; animation: fbFall 11.5s linear infinite 8s; }
+/* Crossing the horizon: same "goes fully black" beat as the shader ending,
+   driven by the same --fall value. */
+#fallback .fb-scrim {
+  position: absolute; inset: 0; background: #000;
+  opacity: calc(var(--fall, 0) * var(--fall, 0) * 0.92);
+}
+@keyframes fbTwinkle { 0%, 100% { opacity: .32; } 50% { opacity: .58; } }
+@keyframes fbSpin    { to { transform: rotate(360deg); } }
+@keyframes fbPulse   { 0%, 100% { opacity: .78; } 50% { opacity: 1; } }
+@keyframes fbFall {
+  0%   { transform: translate(-50%, -50%) translate(40vmax, -24vmax) scale(1); opacity: 0; }
+  8%   { opacity: .9; }
+  90%  { opacity: .5; }
+  100% { transform: translate(-50%, -50%) translate(2vmax, 1vmax) scale(.12); opacity: 0; }
+}
+@media (max-width: 820px) {
+  #fallback .fb-stage { left: 50%; top: 34%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #fallback .fb-disk, #fallback .fb-ring, #fallback .fb-stars, #fallback .fb-mote { animation: none; }
+}
 
 /* Scenes: fixed overlays, faded in/out by JS ----------------------------- */
 .scene {
@@ -232,7 +321,19 @@ noscript .ns {
 <body>
 
 <canvas id="gl"></canvas>
-<div id="fallback"></div>
+<div id="fallback" aria-hidden="true">
+  <div class="fb-stars"></div>
+  <div class="fb-stage">
+    <div class="fb-halo"></div>
+    <div class="fb-disk"></div>
+    <div class="fb-ring"></div>
+    <div class="fb-core"></div>
+  </div>
+  <div class="fb-mote a"></div>
+  <div class="fb-mote b"></div>
+  <div class="fb-mote c"></div>
+  <div class="fb-scrim"></div>
+</div>
 
 <div id="brand">VOID</div>
 <button id="sound" aria-label="toggle sound">● sound</button>
@@ -357,6 +458,17 @@ const easeIO = (t) => t * t * (3 - 2 * t);
    ========================================================================== */
 const canvas = $("gl");
 const gl = canvas.getContext("webgl", { antialias: false, alpha: false, powerPreference: "high-performance" });
+
+/* null while the real shader is running — the frame loop below skips the
+   fallback CSS-var writes entirely in that case, so this costs the 99% of
+   working-WebGL visitors nothing. Set once, from whichever of the four
+   failure paths (missing context, software renderer, compile/link failure,
+   context lost later) actually fires. */
+let fallbackEl = null;
+function enableFallback() {
+  document.body.classList.add("nogl");
+  fallbackEl = $("fallback");
+}
 
 const VERT = `
 attribute vec2 aP;
@@ -639,7 +751,11 @@ function isSoftwareRenderer() {
 }
 
 function buildGL() {
-  if (!gl || isSoftwareRenderer()) { document.body.classList.add("nogl"); return false; }
+  // ?nogl=1 previews the no-WebGL / software-renderer fallback on any
+  // machine, without touching real browser settings.
+  if (!gl || isSoftwareRenderer() || qs.get("nogl") === "1") {
+    enableFallback(); return false;
+  }
   const sh = (type, src) => {
     const s = gl.createShader(type);
     gl.shaderSource(s, src); gl.compileShader(s);
@@ -651,12 +767,12 @@ function buildGL() {
   };
   const v = sh(gl.VERTEX_SHADER, VERT);
   const f = sh(gl.FRAGMENT_SHADER, (LOWQ ? "#define LOWQ 1\n" : "") + FRAG);
-  if (!v || !f) { document.body.classList.add("nogl"); return false; }
+  if (!v || !f) { enableFallback(); return false; }
   prog = gl.createProgram();
   gl.attachShader(prog, v); gl.attachShader(prog, f); gl.linkProgram(prog);
   if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
     console.error(gl.getProgramInfoLog(prog));
-    document.body.classList.add("nogl"); return false;
+    enableFallback(); return false;
   }
   gl.useProgram(prog);
   const buf = gl.createBuffer();
@@ -1069,6 +1185,15 @@ function frame(now) {
   S.p += (S.pTarget - S.p) * (1 - Math.exp(-dt * 0.004));
   S.flare = Math.max(S.flare - dt * 0.0006, 0);
 
+  // No-WebGL fallback reads the SAME fall/burn numbers the shader does, just
+  // through CSS custom properties instead of uniforms. Purely additive — does
+  // not touch the GL branch below at all, and costs two style writes a frame
+  // only on the machines actually using this path.
+  if (fallbackEl) {
+    fallbackEl.style.setProperty("--fall", S.p.toFixed(4));
+    fallbackEl.style.setProperty("--burn", S.burnedFrac.toFixed(4));
+  }
+
   const cam = camera();
 
   const drawDelta = now - lastDraw;
@@ -1120,7 +1245,7 @@ if (S.reduced) {
 }
 canvas.addEventListener("webglcontextlost", (e) => {
   e.preventDefault();
-  document.body.classList.add("nogl");
+  enableFallback();
 });
 
 applyStats({});           // defaults (pre-launch)
