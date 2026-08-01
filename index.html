@@ -112,10 +112,12 @@ body.nogl #fallback { display: block; }
 .odo { display: inline-flex; overflow: hidden; }
 .odo .grp { display: inline-flex; }
 .odo .sep { color: var(--vio-dim); }
+/* height + line-height are overwritten in whole pixels by makeOdo(); the em
+   values here are only a pre-measurement fallback. */
 .odo .col { display: inline-block; height: 1.18em; overflow: hidden; }
 .odo .col span {
-  display: block; height: 1.18em; line-height: 1.18em;
-  transition: transform 1.4s cubic-bezier(.2, .9, .25, 1);
+  display: block; line-height: 1.18em;
+  transition: transform var(--odo-t, 1.4s) cubic-bezier(.2, .9, .25, 1);
 }
 
 /* s3 — the last light (CA) ------------------------------------------------ */
@@ -363,14 +365,36 @@ uniform float uZoom;   // background magnification
 uniform float uFlare;  // burn pulse
 uniform float uQ;      // quality 0..1
 
-float h21(vec2 p){ p = fract(p*vec2(123.34, 456.21)); p += dot(p, p+45.32); return fract(p.x*p.y); }
+/* Compile-time quality. A LOWQ variant is compiled for phones instead of
+   branching at runtime — GPU branches cost the same as taking them. */
+#ifdef LOWQ
+  #define OCTAVES      3
+  #define BLUR_SAMPLES 1
+  #define PLANETS      2
+#else
+  #define OCTAVES      5
+  #define BLUR_SAMPLES 3
+  #define PLANETS      4
+#endif
+
+/* Hash — Dave Hoskins' hash12.
+   The previous version multiplied coordinates by ~123.34/456.21 and took
+   fract(). Once the star-grid coords get large (density 67 x a drifting field)
+   that product blows past the effective mantissa of mobile "highp", so
+   neighbouring cells hash to identical values and the noise collapses into
+   visible blocks. This keeps every intermediate inside [0,1). */
+float h21(vec2 p){
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
 float n2(vec2 p){
   vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
   return mix(mix(h21(i), h21(i+vec2(1,0)), f.x), mix(h21(i+vec2(0,1)), h21(i+vec2(1,1)), f.x), f.y);
 }
 float fbm(vec2 p){
   float a = 0.5, s = 0.0;
-  for(int i = 0; i < 5; i++){ s += a*n2(p); p = p*2.03 + 17.7; a *= 0.55; }
+  for(int i = 0; i < OCTAVES; i++){ s += a*n2(p); p = p*2.03 + 17.7; a *= 0.55; }
   return s;
 }
 
@@ -381,7 +405,7 @@ mat2 rot2(float a){ float s = sin(a), c = cos(a); return mat2(c, -s, s, c); }
    stretched along its fall line, and vanishes past the shadow. */
 vec3 planets(vec2 c, float shadowR, float redshift){
   vec3 acc = vec3(0.0);
-  for(int i = 0; i < 4; i++){
+  for(int i = 0; i < PLANETS; i++){
     float fi = float(i);
     float period = 34.0 + fi*13.0;
     float seed = h21(vec2(fi*7.31, fi*3.77));
@@ -428,13 +452,13 @@ vec3 starLayer(vec2 p, float density, float size, float thresh){
 vec3 background(vec2 w, vec2 rdir, float streak){
   vec3 col = vec3(0.0);
   // radial motion blur while falling: average samples along the fall direction
-  for(int i = 0; i < 3; i++){
+  for(int i = 0; i < BLUR_SAMPLES; i++){
     vec2 sp = w + rdir * streak * float(i) * 0.013;
     col += starLayer(sp, 13.0, 0.055, 0.78);
     col += starLayer(sp, 31.0, 0.040, 0.82) * 0.65;
     col += starLayer(sp, 67.0, 0.032, 0.85) * 0.38;
   }
-  col /= 3.0;
+  col /= float(BLUR_SAMPLES);
   // violet nebulae
   float n  = fbm(w*2.4 + vec2(3.1, 7.2));
   float n2_ = fbm(w*1.1 - vec2(1.0, 2.0));
@@ -462,9 +486,12 @@ void main(){
   float streak = smoothstep(0.5, 1.0, uP) * (1.6 / max(r, 0.22));
   vec3 col = background(w, dir, streak);
 
-  // faint secondary image ringing the photon sphere
+  // faint secondary image ringing the photon sphere — a second full background
+  // evaluation, so phones skip it entirely.
+#ifndef LOWQ
   float ringZone = exp(-abs(r - shadowR) * (8.0 / max(rs, 1e-3)));
   col = mix(col, background(-w*0.97, dir, streak), clamp(ringZone*0.55, 0.0, 0.55));
+#endif
 
   // -- the final act: layers die in order, reddening as they go ------------
   // The sky goes first, then the disk, and the photon ring outlives them all,
@@ -524,14 +551,29 @@ void main(){
   // Horizon crossing is handled per-layer above (fadeBG/fadeDisk/fadeRing),
   // so the ring outlives the sky instead of everything dying at once.
 
-  // vignette + grain + tone
+  // vignette + tone
   vec2 uv = frag / uRes;
   col *= 1.0 - 0.45 * pow(length(uv - 0.5) * 1.35, 2.0);
-  col += (h21(frag + fract(uT)*13.0) - 0.5) * (0.010 + 0.028*fadeBG);
-  gl_FragColor = vec4(pow(max(col, 0.0), vec3(0.85)), 1.0);
+  col = pow(max(col, 0.0), vec3(0.85));
+
+  /* Dither AFTER the tone curve. Banding lives in the 8-bit output, so the
+     noise has to be applied in that same space — doing it before the curve
+     (as this did) let the curve squash the dither exactly in the near-black
+     region that needed it most, which is where the visible stepping was.
+     Amplitude ~1.5/255: enough to break a band, invisible as grain. */
+  col += (h21(frag + fract(uT)*13.0) - 0.5) * (0.006 + 0.010*fadeBG);
+  gl_FragColor = vec4(col, 1.0);
 }`;
 
-let prog = null, uni = {}, dpr = Math.min(devicePixelRatio || 1, 2);
+/* Phones run a full-screen fragment shader at 3x device pixel ratio if you let
+   them, which is where the stutter came from — a 1080p-wide phone at dpr 3 is
+   ~9M pixels per frame of noise and lensing, more than most desktops.
+   Cap hard, and compile the cheap shader variant. */
+const COARSE = matchMedia("(pointer: coarse)").matches || innerWidth < 820;
+const LOWQ = COARSE || qs.get("fx") === "low";
+
+let prog = null, uni = {};
+let dpr = Math.min(devicePixelRatio || 1, LOWQ ? 1.25 : 2);
 
 function buildGL() {
   if (!gl) { document.body.classList.add("nogl"); return false; }
@@ -544,7 +586,8 @@ function buildGL() {
     }
     return s;
   };
-  const v = sh(gl.VERTEX_SHADER, VERT), f = sh(gl.FRAGMENT_SHADER, FRAG);
+  const v = sh(gl.VERTEX_SHADER, VERT);
+  const f = sh(gl.FRAGMENT_SHADER, (LOWQ ? "#define LOWQ 1\n" : "") + FRAG);
   if (!v || !f) { document.body.classList.add("nogl"); return false; }
   prog = gl.createProgram();
   gl.attachShader(prog, v); gl.attachShader(prog, f); gl.linkProgram(prog);
@@ -591,16 +634,19 @@ function camera() {
 }
 
 /* Adaptive quality: if frames run long, shed resolution before shedding fx */
-let emaDt = 16, slowFrames = 0, quality = 1;
+/* Shed resolution well before it becomes a visible stutter. The old version
+   waited 90 consecutive slow frames (several seconds of jank) before reacting;
+   this reacts in well under a second and can go further down. */
+let emaDt = 16, slowFrames = 0, quality = LOWQ ? 0 : 1;
 function adapt(dt) {
-  emaDt = emaDt * 0.95 + dt * 0.05;
-  if (emaDt > 26 && ++slowFrames > 90) {
+  emaDt = emaDt * 0.9 + dt * 0.1;
+  if (emaDt > 22 && ++slowFrames > 20) {
     slowFrames = 0;
-    if (dpr > 0.75) { dpr = Math.max(0.6, dpr * 0.8); resize(); }
-    else quality = 0;
+    if (dpr > 0.5) { dpr = Math.max(0.5, dpr * 0.8); resize(); }
+  } else if (emaDt < 15) {
+    slowFrames = 0;
   }
 }
-if (qs.get("fx") === "low") { dpr = Math.min(dpr, 1); quality = 0; }
 
 /* ==========================================================================
    Scenes
@@ -741,14 +787,39 @@ function makeOdo(el, digits) {
     stack.style.whiteSpace = "pre-line";
     col.appendChild(stack);
     el.appendChild(col);
-    cols.push(stack);
+    cols.push({ col, stack });
   }
-  return (value) => {
+
+  let step = 0, last = 0;
+
+  /* Snap each digit cell to a whole pixel.
+     With the clip height and the translate both in `em`, they resolve to
+     fractional pixels, so every digit gets clipped and re-sampled mid-pixel —
+     that is the chunky look on the supply counter, and it gets worse the
+     larger the font, which is why the big one was the obvious one. */
+  function measure() {
+    const fs = parseFloat(getComputedStyle(el).fontSize) || 16;
+    step = Math.max(Math.round(fs * 1.18), 1);
+    for (const { col, stack } of cols) {
+      col.style.height = step + "px";
+      stack.style.lineHeight = step + "px";
+    }
+    apply(last, true);
+  }
+
+  function apply(value, instant) {
+    last = value;
     const s = String(Math.max(Math.round(value), 0)).padStart(digits, "0");
-    cols.forEach((stack, i) => {
-      stack.style.transform = `translateY(${-Number(s[i]) * 1.18}em)`;
+    if (instant) el.style.setProperty("--odo-t", "0s");
+    cols.forEach(({ stack }, i) => {
+      stack.style.transform = `translateY(${-Number(s[i]) * step}px)`;
     });
-  };
+    if (instant) requestAnimationFrame(() => el.style.removeProperty("--odo-t"));
+  }
+
+  measure();
+  addEventListener("resize", measure);
+  return (value) => apply(value, false);
 }
 const setOdoSupply = makeOdo($("odoSupply"), 9);
 const setOdoInside = makeOdo($("odoInside"), 9);
