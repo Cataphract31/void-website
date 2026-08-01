@@ -109,7 +109,13 @@ body.nogl #fallback { display: block; }
 }
 
 /* Odometer ---------------------------------------------------------------- */
-.odo { display: inline-flex; overflow: hidden; }
+/* Each column clips a stack of 0-9 down to a single visible line. An inherited
+   text-shadow therefore bleeds in from the HIDDEN digits sitting just above and
+   below the window, filling every column with a soft rectangle — the shadowy
+   blocks, and obvious on OLED where the surround is true black. So: no glyph
+   shadow inside the columns, and glow the composited result instead, which
+   follows the digit silhouette and stops at it. */
+.odo { display: inline-flex; text-shadow: none; }
 .odo .grp { display: inline-flex; }
 .odo .sep { color: var(--vio-dim); }
 /* height + line-height are overwritten in whole pixels by makeOdo(); the em
@@ -119,6 +125,8 @@ body.nogl #fallback { display: block; }
   display: block; line-height: 1.18em;
   transition: transform var(--odo-t, 1.4s) cubic-bezier(.2, .9, .25, 1);
 }
+.stat .v .odo { filter: drop-shadow(0 0 14px rgba(167,139,250,.42)); }
+#odoBig .odo { filter: drop-shadow(0 0 20px rgba(167,139,250,.5)); }
 
 /* s3 — the last light (CA) ------------------------------------------------ */
 #s3 .k {
@@ -355,7 +363,15 @@ attribute vec2 aP;
 void main(){ gl_Position = vec4(aP, 0.0, 1.0); }`;
 
 const FRAG = `
+/* High precision is OPTIONAL for fragment shaders in WebGL 1 — some older
+   GPUs don't have it, and asking for it there fails compilation outright,
+   which would drop the whole page to the CSS fallback. Ask, then settle.
+   Safe now that the hash keeps its intermediates inside [0,1). */
+#ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
+#else
+precision mediump float;
+#endif
 uniform vec2  uRes;    // device px
 uniform vec2  uBH;     // black hole centre, device px (GL y-up)
 uniform float uT;      // seconds
@@ -450,15 +466,25 @@ vec3 starLayer(vec2 p, float density, float size, float thresh){
 }
 
 vec3 background(vec2 w, vec2 rdir, float streak){
-  vec3 col = vec3(0.0);
-  // radial motion blur while falling: average samples along the fall direction
-  for(int i = 0; i < BLUR_SAMPLES; i++){
-    vec2 sp = w + rdir * streak * float(i) * 0.013;
-    col += starLayer(sp, 13.0, 0.055, 0.78);
-    col += starLayer(sp, 31.0, 0.040, 0.82) * 0.65;
-    col += starLayer(sp, 67.0, 0.032, 0.85) * 0.38;
+  vec3 col = starLayer(w, 13.0, 0.055, 0.78)
+           + starLayer(w, 31.0, 0.040, 0.82) * 0.65
+           + starLayer(w, 67.0, 0.032, 0.85) * 0.38;
+#if BLUR_SAMPLES > 1
+  /* Radial motion blur, but only once you are actually falling. Above the
+     halfway mark the streak factor is exactly zero for every pixel on screen,
+     so the old unconditional loop sampled the identical point three times and
+     averaged it with itself — triple cost, no visual difference. The branch is
+     uniform across the draw, so the GPU takes one side or the other. */
+  if (streak > 0.002) {
+    for(int i = 1; i < BLUR_SAMPLES; i++){
+      vec2 sp = w + rdir * streak * float(i) * 0.013;
+      col += starLayer(sp, 13.0, 0.055, 0.78);
+      col += starLayer(sp, 31.0, 0.040, 0.82) * 0.65;
+      col += starLayer(sp, 67.0, 0.032, 0.85) * 0.38;
+    }
+    col /= float(BLUR_SAMPLES);
   }
-  col /= float(BLUR_SAMPLES);
+#endif
   // violet nebulae
   float n  = fbm(w*2.4 + vec2(3.1, 7.2));
   float n2_ = fbm(w*1.1 - vec2(1.0, 2.0));
@@ -490,7 +516,13 @@ void main(){
   // evaluation, so phones skip it entirely.
 #ifndef LOWQ
   float ringZone = exp(-abs(r - shadowR) * (8.0 / max(rs, 1e-3)));
-  col = mix(col, background(-w*0.97, dir, streak), clamp(ringZone*0.55, 0.0, 0.55));
+  /* This term is a thin annulus around the photon sphere; everywhere else it
+     multiplies by ~0. Evaluating a whole second background for the entire
+     screen to then throw it away was roughly half the frame cost. The branch
+     is spatially coherent (a ring), so whole wavefronts skip it. */
+  if (ringZone > 0.01) {
+    col = mix(col, background(-w*0.97, dir, streak), ringZone*0.55);
+  }
 #endif
 
   // -- the final act: layers die in order, reddening as they go ------------
@@ -613,6 +645,7 @@ function resize() {
   canvas.style.width = w + "px";
   canvas.style.height = h + "px";
   if (gl && prog) gl.viewport(0, 0, canvas.width, canvas.height);
+  lastDrawnP = -1; // force a redraw even if the clock has been frozen
 }
 addEventListener("resize", resize);
 
@@ -634,16 +667,26 @@ function camera() {
 }
 
 /* Adaptive quality: if frames run long, shed resolution before shedding fx */
-/* Shed resolution well before it becomes a visible stutter. The old version
-   waited 90 consecutive slow frames (several seconds of jank) before reacting;
-   this reacts in well under a second and can go further down. */
+/* Degradation ladder for hardware I can't test on.
+   Resolution first, then frame rate, and finally the animation itself: once
+   time is frozen the scene only redraws when you actually scroll, which costs
+   nothing while idle. A still image that tracks your scroll reads as
+   deliberate; an 8fps stutter reads as broken. */
 let emaDt = 16, slowFrames = 0, quality = LOWQ ? 0 : 1;
-function adapt(dt) {
-  emaDt = emaDt * 0.9 + dt * 0.1;
-  if (emaDt > 22 && ++slowFrames > 20) {
-    slowFrames = 0;
-    if (dpr > 0.5) { dpr = Math.max(0.5, dpr * 0.8); resize(); }
-  } else if (emaDt < 15) {
+let frameBudget = 0;   // min ms between draws; 0 = every frame
+let frozenT = -1;      // >= 0 once the clock is stopped
+
+function adapt(drawDelta) {
+  emaDt = emaDt * 0.9 + drawDelta * 0.1;
+  const target = frameBudget || 16.7;
+  if (emaDt > target * 1.35) {
+    if (++slowFrames > 20) {
+      slowFrames = 0;
+      if (dpr > 0.5) { dpr = Math.max(0.5, dpr * 0.8); resize(); }
+      else if (frameBudget === 0) frameBudget = 33;                    // 30fps
+      else if (frozenT < 0) frozenT = (performance.now() - S.t0) / 1000;
+    }
+  } else {
     slowFrames = 0;
   }
 }
@@ -982,6 +1025,8 @@ paintSound();
    Main loop
    ========================================================================== */
 let lastT = performance.now();
+let lastDraw = 0, lastDrawnP = -1;
+let lastMotionP = -1, lastMotionT = 0;
 
 function frame(now) {
   const dt = Math.min(now - lastT, 100);
@@ -995,8 +1040,20 @@ function frame(now) {
 
   const cam = camera();
 
-  if (prog && !document.hidden) {
-    const t = (now - S.t0) / 1000;
+  const drawDelta = now - lastDraw;
+  // Once frozen, only the scroll position can change the picture.
+  const stale = frozenT < 0 || Math.abs(S.p - lastDrawnP) > 0.0005 || S.flare > 0;
+
+  /* Idle throttle. When nobody is scrolling, the only thing changing is slow
+     drift and twinkle, which are indistinguishable at 30fps — but on a 144Hz
+     monitor the untrottled loop was rendering a full-screen lensing shader
+     144 times a second to animate almost nothing. That is the fan noise. */
+  if (Math.abs(S.p - lastMotionP) > 0.0004) { lastMotionP = S.p; lastMotionT = now; }
+  const idle = now - lastMotionT > 1200;
+  const budget = Math.max(frameBudget, idle ? 33 : 0);
+
+  if (prog && !document.hidden && drawDelta >= budget && stale) {
+    const t = frozenT >= 0 ? frozenT : (now - S.t0) / 1000;
     gl.uniform2f(uni.uRes, canvas.width, canvas.height);
     gl.uniform2f(uni.uBH, cam.bhGlX, cam.bhGlY);
     gl.uniform1f(uni.uT, t);
@@ -1006,7 +1063,10 @@ function frame(now) {
     gl.uniform1f(uni.uFlare, S.flare);
     gl.uniform1f(uni.uQ, quality);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
-    adapt(dt);
+    // Don't let the idle throttle's longer frames look like slow hardware.
+    if (lastDraw && !idle) adapt(drawDelta);
+    lastDraw = now;
+    lastDrawnP = S.p;
   }
 
   if (!document.body.classList.contains("flat")) updateScenes(cam);

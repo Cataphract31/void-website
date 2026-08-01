@@ -461,7 +461,13 @@ attribute vec2 aP;
 void main(){ gl_Position = vec4(aP, 0.0, 1.0); }`;
 
 const FRAG = `
+/* highp is optional in WebGL 1 fragment shaders; requesting it on a GPU that
+   lacks it fails the compile and loses the whole background. */
+#ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
+#else
+precision mediump float;
+#endif
 uniform vec2  uRes;
 uniform vec2  uBH;
 uniform float uT;
@@ -649,8 +655,13 @@ function resize() {
 addEventListener("resize", resize);
 
 const t0 = performance.now();
+let lastDraw = 0;
+// It is decoration behind text. 30fps is indistinguishable here and halves the
+// GPU cost, which matters most on the phones that can least afford it.
+const MIN_FRAME_MS = 33;
 function frame(now) {
-  if (prog && !document.hidden) {
+  if (prog && !document.hidden && now - lastDraw >= MIN_FRAME_MS) {
+    lastDraw = now;
     const narrow = innerWidth < 960;
     // The hole owns the right edge on desktop, floats high-centre on mobile.
     // Tiny scroll parallax keeps it alive without ever chasing the text.
