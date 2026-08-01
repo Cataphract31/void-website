@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>VOID — Technical Paper</title>
+<title>VOID Technical Paper</title>
 <meta name="description" content="VOID technical paper: an immutable Solana program that burns its own sell-side liquidity on a fixed schedule. Supply only falls.">
 <meta name="theme-color" content="#04000d">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23050014'/%3E%3Ccircle cx='32' cy='32' r='17' fill='none' stroke='%23a78bfa' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='9' fill='%23000'/%3E%3C/svg%3E">
@@ -239,22 +239,22 @@ footer a:hover { color: var(--vio); }
 
 <section id="abstract">
   <div class="shead"><span class="snum">00</span><h2>Abstract</h2></div>
-  <p>VOID is a deflationary protocol on Solana that consumes its own liquidity. On a fixed on-chain schedule, an immutable program withdraws <b>1% of its trading position</b> from the VOID/SOL pool. Every VOID token that emerges is <b>burned</b> — destroyed at the SPL token level, not parked in a dead wallet. The SOL is <b>captured</b>, and roughly half of it returns immediately to the same pool as a buyback.</p>
+  <p>VOID is a deflationary protocol on Solana that consumes its own liquidity. On a fixed on-chain schedule, an immutable program withdraws <b>1% of its trading position</b> from the VOID/SOL pool. Every VOID token that emerges is <b>burned</b>, destroyed at the SPL token level rather than parked in a dead wallet. The SOL is <b>captured</b>, and roughly half of it returns immediately to the same pool as a buyback.</p>
   <p>The result is asymmetric by construction: each cycle removes about three times more VOID from the market than SOL. No taxes, no reflections, no hidden inflation, and after renouncement, nobody with the power to change any of it.</p>
   <div class="pull">Supply only falls. The pool only tightens. There is no third direction.</div>
 </section>
 
 <section id="cycle">
   <div class="shead"><span class="snum">01</span><h2>The Cycle</h2></div>
-  <p>The protocol's liquidity lives in a single VOID/SOL position on <b>Meteora DAMM v2</b>, owned by a <b>program-derived address</b> — an account no human holds keys to. The position was created inside the program and has never been touched by a person.</p>
+  <p>The protocol's liquidity lives in a single VOID/SOL position on <b>Meteora DAMM v2</b>, owned by a <b>program-derived address</b>, an account no human holds keys to. The position was created inside the program and has never been touched by a person.</p>
   <p>When the interval elapses, <b>any wallet on Solana</b> may trigger the cycle. There is no privileged caller and no way to skip a turn.</p>
   <ol class="steps">
     <li>All trading fees accrued to the position are claimed.</li>
     <li>1% of the position's liquidity is withdrawn.</li>
-    <li>Every VOID received — from the withdrawal and from fees alike — is <b>burned</b>.</li>
+    <li>Every VOID received, from the withdrawal and from fees alike, is <b>burned</b>.</li>
     <li>The SOL is captured: 10% funds operations, 90% enters the protocol treasury.</li>
     <li>Roughly half the treasury's share <b>buys VOID back from the same pool</b>. The other half acquires partner assets on Solana.</li>
-    <li>The bought VOID and the partner assets are paired into <b>side pools</b> — Meteora DAMM v2, or DLMM where a tighter range is wanted.</li>
+    <li>The bought VOID and the partner assets are paired into <b>side pools</b>: Meteora DAMM v2, or DLMM where a tighter range is wanted.</li>
   </ol>
   <p>Steps 1–4 are on-chain, atomic, and unstoppable. Steps 5–6 are treasury deployment: the destination is fixed by design, the timing is not.</p>
 
@@ -264,12 +264,12 @@ footer a:hover { color: var(--vio); }
     <tr><td>0 – 5%</td><td class="hot">6 hours</td></tr>
     <tr><td>5 – 10%</td><td class="hot">12 hours</td></tr>
     <tr><td>10 – 15%</td><td class="hot">18 hours</td></tr>
-    <tr><td>15%+</td><td class="hot">24 hours — cap, permanent</td></tr>
+    <tr><td>15%+</td><td class="hot">24 hours, permanent cap</td></tr>
   </table></div>
   <p>Burned percentage is read live from the mint. The schedule cannot be gamed, because the quantity it measures is the quantity it already destroyed.</p>
 
   <h3>Fee routing</h3>
-  <p>The pool charges a flat 1% trading fee plus a dynamic volatility surcharge, collected <b>on the output token</b> of each swap — the side leaving the pool. This is the opposite of the Uniswap V3 convention, where the fee comes out of the input, and it is the hinge the entire design turns on:</p>
+  <p>The pool charges a flat 1% trading fee plus a dynamic volatility surcharge, collected <b>on the output token</b> of each swap, the side leaving the pool. This is the opposite of the Uniswap V3 convention, where the fee comes out of the input, and it is the hinge the entire design turns on:</p>
   <div class="tblwrap"><table>
     <tr><th>direction</th><th>fee paid in</th><th>destiny</th></tr>
     <tr><td>buy (SOL → VOID)</td><td class="hot">VOID</td><td class="hot">burned next cycle</td></tr>
@@ -300,20 +300,20 @@ footer a:hover { color: var(--vio); }
     <div class="stat green"><div class="n">+0.9%</div><div class="l">quoted price</div></div>
   </div>
 
-  <p>Per cycle, sell-side inventory drains roughly <b>three times faster</b> than buy-side inventory, and the pool's quoted price ends each cycle higher than it started — compounding every interval, forever.</p>
-  <p>None of this is an accounting entry. The buyback is a real market order against the same pool every holder trades on, executed with SOL the protocol took out of that pool minutes earlier. The VOID it acquires is not burned — it becomes the VOID side of the next partner pool, which is how the protocol's reach expands without ever selling a token it did not first buy on the open market.</p>
+  <p>Per cycle, sell-side inventory drains roughly <b>three times faster</b> than buy-side inventory, and the pool's quoted price ends each cycle higher than it started, compounding every interval, forever.</p>
+  <p>None of this is an accounting entry. The buyback is a real market order against the same pool every holder trades on, executed with SOL the protocol took out of that pool minutes earlier. The VOID it acquires is not burned. It becomes the VOID side of the next partner pool, which is how the protocol's reach expands without ever selling a token it did not first buy on the open market.</p>
 </section>
 
 <section id="liquidity">
   <div class="shead"><span class="snum">03</span><h2>Liquidity Architecture</h2></div>
   <h3>Genesis: single-sided</h3>
-  <p>At launch the pool holds only VOID, deposited across a range whose lower bound <b>is</b> the genesis price. No initial SOL, no seeded market-making — the first buyer sets the pool in motion. A structural consequence: <b>the pool cannot quote a price below genesis.</b> That is not a promise about markets; it is a property of the range.</p>
+  <p>At launch the pool holds only VOID, deposited across a range whose lower bound <b>is</b> the genesis price. No initial SOL, no seeded market-making. The first buyer sets the pool in motion. A structural consequence: <b>the pool cannot quote a price below genesis.</b> That is not a promise about markets; it is a property of the range.</p>
 
   <h3>The main pool is permanent</h3>
   <p>The position is held by a program-derived address with exactly one liquidity-touching code path: the burn cycle. There is no withdrawal instruction, no migration hatch, no emergency exit. The only way liquidity ever leaves the main pool is 1% at a time, on schedule, with the VOID side destroyed on the way out.</p>
 
   <h3>Side pools</h3>
-  <p>Side pools pair VOID against other Solana assets and are actively managed by the protocol — rebalanced, resized, and redeployed as the ecosystem grows. They exist to manufacture volume, and volume is the input the whole machine runs on.</p>
+  <p>Side pools pair VOID against other Solana assets and are actively managed by the protocol: rebalanced, resized, and redeployed as the ecosystem grows. They exist to manufacture volume, and volume is the input the whole machine runs on.</p>
 </section>
 
 <section id="flywheel">
@@ -350,16 +350,16 @@ footer a:hover { color: var(--vio); }
       <circle cx="280" cy="190" r="34" fill="#000" stroke="#a78bfa" stroke-width="2"/>
       <circle cx="280" cy="190" r="46" stroke="#a78bfa" stroke-opacity=".25" stroke-width="1"/>
     </svg>
-    <figcaption>fig. 1 — each pass leaves less VOID in existence</figcaption>
+    <figcaption>fig. 1: each pass leaves less VOID in existence</figcaption>
   </figure>
 
   <h3>Why the volume outlives the attention</h3>
   <p>Most tokens have exactly one source of volume: people currently interested in that token. When attention leaves, volume goes to zero, fees go to zero, and whatever mechanism the protocol advertised quietly stops running.</p>
-  <p>VOID is built to survive that. Paired against dozens of Solana assets, it sits at the centre of a web of pools that must stay in agreement with each other. Every time <b>any</b> partner asset moves — up or down, on its own news, with no VOID holder involved — the side pool is momentarily mispriced against the main pool, and arbitrage closes the gap by routing volume <b>through VOID</b>. That volume pays fees. The VOID side of those fees burns.</p>
+  <p>VOID is built to survive that. Paired against dozens of Solana assets, it sits at the centre of a web of pools that must stay in agreement with each other. Every time <b>any</b> partner asset moves, up or down, on its own news, with no VOID holder involved, the side pool is momentarily mispriced against the main pool, and arbitrage closes the gap by routing volume <b>through VOID</b>. That volume pays fees. The VOID side of those fees burns.</p>
   <div class="pull">The protocol does not need people to be interested in VOID. It needs Solana to be volatile.</div>
 
   <div class="math">
-    <div class="k">stylized — the index effect</div>
+    <div class="k">stylized: the index effect</div>
     <div class="eq">partner assets rise 2× against SOL</div>
     <div class="eq">VOID is anchored half to SOL, half to partners</div>
     <div class="eq hi">equilibrium ≈ √(1 × 2) ≈ 1.41×</div>
@@ -370,8 +370,8 @@ footer a:hover { color: var(--vio); }
     </div>
   </div>
 
-  <p>The same arithmetic works downward — a broad decline pulls the same way, and pretending otherwise would be marketing. But the two directions are not symmetric in what they leave behind. A falling price means sellers have pushed VOID back <i>into</i> the main pool — so every scheduled withdrawal catches <b>more tokens</b> and burns deeper. The machine eats fastest exactly when the market is weakest, and what it eats never comes back for the next recovery to lift.</p>
-  <p>Whatever price does, the supply math runs one way only: every cycle ends with fewer VOID in existence than at any moment in history, and a bag that was 0.1% of supply at genesis is quietly becoming 0.11%, 0.12%, 0.15% of everything that remains — without its holder lifting a finger. Red days accelerate the burn. Green days fund it.</p>
+  <p>The same arithmetic works downward too. A broad decline pulls the same way, and pretending otherwise would be marketing. But the two directions are not symmetric in what they leave behind. A falling price means sellers have pushed VOID back <i>into</i> the main pool, so every scheduled withdrawal catches <b>more tokens</b> and burns deeper. The machine eats fastest exactly when the market is weakest, and what it eats never comes back for the next recovery to lift.</p>
+  <p>Whatever price does, the supply math runs one way only: every cycle ends with fewer VOID in existence than at any moment in history, and a bag that was 0.1% of supply at genesis is quietly becoming 0.11%, 0.12%, 0.15% of everything that remains, without its holder lifting a finger. Red days accelerate the burn. Green days fund it.</p>
   <div class="pull">Price is cyclical. Scarcity is a ratchet.</div>
 </section>
 
@@ -380,21 +380,21 @@ footer a:hover { color: var(--vio); }
   <div class="tblwrap"><table>
     <tr><th>property</th><th>value</th></tr>
     <tr><td>standard</td><td>SPL (classic), 6 decimals</td></tr>
-    <tr><td>genesis supply</td><td class="hot">100,000,000 — fixed forever</td></tr>
-    <tr><td>into the launch pool</td><td class="hot">98,000,000 — 98%</td></tr>
-    <tr><td>operator allocation</td><td>2,000,000 — 2%</td></tr>
+    <tr><td>genesis supply</td><td class="hot">100,000,000, fixed forever</td></tr>
+    <tr><td>into the launch pool</td><td class="hot">98,000,000 (98%)</td></tr>
+    <tr><td>operator allocation</td><td>2,000,000 (2%)</td></tr>
     <tr><td>presale</td><td>none</td></tr>
     <tr><td>mint authority</td><td>revoked at genesis</td></tr>
     <tr><td>freeze authority</td><td>revoked at genesis</td></tr>
-    <tr><td>transfer tax</td><td>none — fees exist only inside the pool</td></tr>
+    <tr><td>transfer tax</td><td>none, fees exist only inside the pool</td></tr>
   </table></div>
   <p>98% of the supply enters the pool at genesis. The remaining 2% is the operator allocation. Beyond it, the protocol acquires every VOID it will ever touch the same way anyone else does: buying at market, with SOL the burn produced.</p>
 </section>
 
 <section id="trust">
   <div class="shead"><span class="snum">06</span><h2>Trust Model</h2></div>
-  <p>Operator terms are two numbers: a <b>2% allocation</b> and <b>10% of captured SOL</b>. The other 90% is capital that goes back into the machine — buying VOID, seeding pools, widening the surface that generates volume.</p>
-  <p>That ratio is the incentive design, not a modest ask. Operator revenue scales with volume, and volume scales with how many pools exist and how much is deployed into them. Taking more from any single cycle would slow the only variable that determines what every future cycle pays. The nine-to-one split makes growing the system strictly more profitable than harvesting it — and unlike a token bag, a revenue share cannot be dumped on holders.</p>
+  <p>Operator terms are two numbers: a <b>2% allocation</b> and <b>10% of captured SOL</b>. The other 90% is capital that goes back into the machine: buying VOID, seeding pools, widening the surface that generates volume.</p>
+  <p>That ratio is the incentive design, not a modest ask. Operator revenue scales with volume, and volume scales with how many pools exist and how much is deployed into them. Taking more from any single cycle would slow the only variable that determines what every future cycle pays. The nine-to-one split makes growing the system strictly more profitable than harvesting it, and unlike a token bag, a revenue share cannot be dumped on holders.</p>
 
   <h3>The road to immutability</h3>
   <p>deploy → initialize → verified build published → IDL on-chain → pool wired → live soak → <b>upgrade authority renounced.</b> After renouncement the program is no longer software anyone maintains. The schedule, the split, the burn: unchangeable by anyone, including the people who wrote it.</p>
@@ -402,19 +402,19 @@ footer a:hover { color: var(--vio); }
   <h3>The ledger</h3>
   <div class="ledger">
     <div class="led no">
-      <h4>impossible — for anyone, forever</h4>
-      <div>mint new VOID — authority is null</div>
-      <div>freeze anyone's tokens — authority is null</div>
-      <div>withdraw the main position — no code path exists</div>
+      <h4>impossible for anyone, forever</h4>
+      <div>mint new VOID (authority is null)</div>
+      <div>freeze anyone's tokens (authority is null)</div>
+      <div>withdraw the main position (no code path exists)</div>
       <div>change the schedule, the split, or the destinations</div>
-      <div>touch VOID held by the program — treasury moves any asset except VOID</div>
+      <div>touch VOID held by the program (treasury moves any asset except VOID)</div>
     </div>
     <div class="led yes">
-      <h4>guaranteed — for everyone, forever</h4>
-      <div>trigger the burn — any wallet, permissionlessly</div>
+      <h4>guaranteed for everyone, forever</h4>
+      <div>trigger the burn (any wallet, permissionlessly)</div>
       <div>verify the deployed binary against the published source</div>
       <div>read every parameter on-chain before trusting a word of this</div>
-      <div>watch every burn as it happens — the mint's supply is public state</div>
+      <div>watch every burn as it happens (the mint's supply is public state)</div>
     </div>
   </div>
 </section>
@@ -422,11 +422,11 @@ footer a:hover { color: var(--vio); }
 <section id="security">
   <div class="shead"><span class="snum">07</span><h2>Security</h2></div>
   <p>The position cannot be stolen because no instruction to transfer it exists. Custody sits with a program-derived address whose only liquidity-touching path is the burn cycle itself. Every account the cycle touches is pinned against on-chain state, so substitution attacks fail. Re-initialization is impossible.</p>
-  <p>And <b>reentrancy — the attack class that has drained more AMM protocols than any other — is structurally impossible here</b>: the Solana runtime refuses reentrant cross-program invocation at the platform level. It is not that this code defends against the attack. The chain does not permit the attack to be expressed.</p>
+  <p>And <b>reentrancy, the attack class that has drained more AMM protocols than any other, is structurally impossible here</b>: the Solana runtime refuses reentrant cross-program invocation at the platform level. It is not that this code defends against the attack. The chain does not permit the attack to be expressed.</p>
 
   <h3>Residual risks, disclosed</h3>
   <ul>
-    <li><b>Meteora dependency.</b> The DAMM v2 program is upgradeable by its team — a live dependency shared with every protocol built on it.</li>
+    <li><b>Meteora dependency.</b> The DAMM v2 program is upgradeable by its team, a live dependency shared with every protocol built on it.</li>
     <li><b>Operations account liveness.</b> The operations destination is a token account that could in principle be closed. Recreating it is permissionless and automated; the worst case is a delayed cycle, never a lost one.</li>
     <li><b>Audit status.</b> An internal security review is published in the repository. No external audit has been commissioned. The mitigations are a verified build, an on-chain IDL, and a live soak period before renouncement.</li>
     <li><b>Treasury deployment is discretionary.</b> Steps 1–4 of the cycle are enforced by the program. Which assets get paired, and when, is an operator decision.</li>
