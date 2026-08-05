@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CRITICAL MASS — Crowd-Coupled Hazard Crash</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Oswald:wght@400;500;600&display=swap');
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(1200px 700px at 50% -10%, #17202a 0%, #101418 55%);
+      color: #e8e2d4;
+      font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+      padding: 14px;
+    }
+
+    @keyframes cmShake {
+      0%, 100% { transform: translate(0, 0); }
+      20% { transform: translate(-6px, 3px); }
+      40% { transform: translate(5px, -4px); }
+      60% { transform: translate(-4px, -2px); }
+      80% { transform: translate(3px, 4px); }
+    }
+    .cm-shake { animation: cmShake 0.45s linear 1; }
+
+    @keyframes cmPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.45; }
+    }
+    .cm-pulse { animation: cmPulse 1.1s ease-in-out infinite; }
+
+    @keyframes cmLamp {
+      0%, 100% { filter: brightness(1); }
+      50% { filter: brightness(1.35); }
+    }
+    .cm-lamp-on { animation: cmLamp 1.4s ease-in-out infinite; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .cm-shake, .cm-pulse, .cm-lamp-on { animation: none !important; }
+    }
+
+    input.cm {
+      background: #161b20;
+      border: 1px solid #2a3138;
+      color: #e8e2d4;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 14px;
+      padding: 9px 10px;
+      width: 110px;
+      box-sizing: border-box;
+    }
+    input.cm:focus { outline: 2px solid #ffb347; outline-offset: -1px; }
+
+    button {
+      font-family: 'Oswald', sans-serif;
+      letter-spacing: 0.12em;
+      border: 1px solid #2a3138;
+      background: #161b20;
+      color: #e8e2d4;
+      padding: 10px 16px;
+      cursor: pointer;
+      font-size: 14px;
+      text-transform: uppercase;
+    }
+    button:focus-visible { outline: 2px solid #ffb347; outline-offset: 2px; }
+    button:disabled { cursor: not-allowed; opacity: 0.6; }
+
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-thumb { background: #2a3138; }
+
+    .btn-quick { padding: 8px 10px; font-size: 11px; }
+    .btn-arm { background: #ff9f1c; color: #151009; border: 1px solid #ff9f1c; font-weight: 600; padding: 12px 24px; }
+    .btn-eject {
+      font-size: 20px; font-weight: 600; padding: 16px 42px;
+      background: #6fcf8f; color: #0d1512; border: 1px solid #6fcf8f;
+      box-shadow: 0 0 22px rgba(111,207,143,0.33);
+    }
+    .btn-eject-queued { background: #161b20; color: #79d2e6; border: 1px solid #79d2e6; box-shadow: none; }
+  </style>
+</head>
+<body>
+
+  <!-- App Wrapper -->
+  <div id="app">
+    <!-- Header -->
+    <div style="display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 10px;">
+      <div style="font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 22px; letter-spacing: 0.22em;">
+        CRITICAL<span style="color: #ff9f1c;"> MASS</span>
+      </div>
+      <div id="round-info" style="color: #6b7480; font-size: 12px;"></div>
+      <div style="margin-left: auto; display: flex; gap: 14px; align-items: center; font-size: 13px;">
+        <span>BAL <span id="bal-display" style="color: #ffb347;">10.00 ◎</span></span>
+        <span id="pnl-display" style="color: #6fcf8f;">+0.00 ◎ session</span>
+        <button id="sound-btn" style="padding: 5px 10px; font-size: 11px;">SOUND ON</button>
+      </div>
+    </div>
+
+    <!-- Annunciator Grid -->
+    <div id="annunciators" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; margin-bottom: 12px;"></div>
+
+    <!-- Main Grid -->
+    <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: stretch;">
+      <!-- Scope + Controls -->
+      <div style="flex: 1 1 560px; min-width: 320px; display: flex; flex-direction: column; gap: 12px;">
+        
+        <!-- Scope Wrap -->
+        <div id="scope-wrap" style="position: relative; height: 340px; background: #1a1f24; border: 1px solid #2a3138; box-shadow: inset 0 0 40px #00000088;">
+          <canvas id="scope-canvas" style="position: absolute; inset: 0;"></canvas>
+          
+          <!-- Big Readout -->
+          <div id="big-readout" style="position: absolute; top: 14px; left: 0; right: 0; text-align: center; pointer-events: none;"></div>
+
+          <!-- Resolution Card -->
+          <div id="resolution-card" style="display: none; position: absolute; left: 10px; right: 10px; bottom: 10px; max-height: 200px; overflow-y: auto; background: #10151acc; border: 1px solid #2a3138; backdrop-filter: blur(3px); padding: 10px; font-size: 12px;"></div>
+        </div>
+
+        <!-- Controls Panel -->
+        <div id="controls-panel" style="background: #1a1f24; border: 1px solid #2a3138; padding: 12px; display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;"></div>
+
+        <!-- History -->
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+          <span style="font-size: 10px; color: #6b7480; letter-spacing: 0.15em;">LAST ROUNDS</span>
+          <div id="history-pills" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
+        </div>
+      </div>
+
+      <!-- Right Column -->
+      <div style="flex: 1 1 300px; min-width: 280px; display: flex; flex-direction: column; gap: 12px;">
+        
+        <!-- Core Load -->
+        <div style="background: #1a1f24; border: 1px solid #2a3138; padding: 12px;">
+          <div style="display: flex; justify-content: space-between; font-size: 10px; letter-spacing: 0.15em; color: #6b7480; margin-bottom: 6px;">
+            <span>CORE LOAD</span>
+            <span>HAZARD / TICK</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
+            <span id="load-val" style="font-size: 26px; font-weight: 700; color: #6fcf8f;">1.00</span>
+            <span id="hazard-val" style="font-size: 26px; font-weight: 700; color: #ffb347;">0.32%</span>
+          </div>
+          <div style="position: relative; height: 14px; background: #161b20; border: 1px solid #2a3138;">
+            <div id="load-bar" style="position: absolute; inset: 1px; width: 40%; background: linear-gradient(90deg, #6fcf8f, #ffb347 55%, #ff4b3e); transition: width 0.25s linear;"></div>
+            <div style="position: absolute; left: 40%; top: -3px; bottom: -3px; width: 1px; background: #e8e2d4; opacity: 0.6;"></div>
+          </div>
+          <div style="font-size: 10px; color: #6b7480; margin-top: 6px;">
+            load = live stakes × <span id="m-desc">1.00</span>× ÷ pot · hazard = 0.0032·load^1.75 — ejects cool the core
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div style="background: #1a1f24; border: 1px solid #2a3138; padding: 12px; max-height: 240px; overflow-y: auto;">
+          <div id="table-header" style="font-size: 10px; letter-spacing: 0.15em; color: #6b7480; margin-bottom: 6px;">
+            THE TABLE · pot 0.00 ◎
+          </div>
+          <div id="table-rows"></div>
+        </div>
+
+        <!-- Event Log -->
+        <div style="background: #1a1f24; border: 1px solid #2a3138; padding: 12px; flex: 1; min-height: 140px; max-height: 220px; overflow-y: auto;">
+          <div style="font-size: 10px; letter-spacing: 0.15em; color: #6b7480; margin-bottom: 6px;">EVENT LOG</div>
+          <div id="feed-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="margin-top: 12px; font-size: 10px; color: #6b7480; line-height: 1.6;">
+      Ejectors always get principal back. Busters' stakes form the dead pool, split among ejectors ∝ stake×(m−1) — later exits earn heavier weight. Rake 4% on dead pool only; the house never touches principal. All exits clear at tick boundaries, so everyone in a slot gets the same multiplier. Deployed: per-tick randomness from a pre-committed hash-chain tape checked against the endogenous hazard — auditable after every round.
+    </div>
+  </div>
+
+  <script>
+    // ---------- Tuning Knobs ----------
+    const TICK_MS = 300;
+    const LOBBY_MS = 9000;
+    const RESULT_MS = 11000;
+    const G0 = 0.008;
+    const GA = 0.00016;
+    const H0 = 0.0032;
+    const H_ALPHA = 1.75;
+    const H_TIME = 0.00006;
+    const RAKE = 0.04;
+    const START_BAL = 10;
+
+    const BOT_NAMES = [
+      "latency_god","glass_hands","kerem.sol","panic_wojak","curve_priest",
+      "dead_inside","fomo_kaan","perma_bull","kimchi_prem","0x_serpent",
+      "wagmi_ratio","sniper_ay","rug_survivor","one_more_trade","exit_liq",
+      "brainlet_cap","dip_buyer","cold_rod","median_enjoyer","tick_merchant"
+    ];
+
+    const C = {
+      bg: "#101418", panel: "#1a1f24", panel2: "#161b20", edge: "#2a3138",
+      amber: "#ffb347", amberHot: "#ff9f1c", red: "#ff4b3e", green: "#6fcf8f",
+      cyan: "#79d2e6", text: "#e8e2d4", dim: "#6b7480", grid: "#26333a"
+    };
+
+    // ---------- Small Helpers ----------
+    const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+    const fmt = (x, d = 2) => (Math.round(x * 10 ** d) / 10 ** d).toFixed(d);
+    const randn = () => {
+      let u = 0, v = 0;
+      while (u === 0) u = Math.random();
+      while (v === 0) v = Math.random();
+      return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+    };
+    const expRand = (mean) => -mean * Math.log(Math.max(1e-9, Math.random()));
+    const seedHex = () => Array.from({ length: 8 }, () => "0123456789abcdef"[(Math.random() * 16) | 0]).join("");
+
+    // ---------- Global State ----------
+    let balance = START_BAL;
+    let pnl = 0;
+    let soundOn = true;
+    let betStr = "0.50";
+    let autoStr = "";
+
+    const S = {
+      phase: "LOBBY",
+      phaseEnds: performance.now() + LOBBY_MS,
+      round: 401 + ((Math.random() * 80) | 0),
+      seed: seedHex(),
+      tick: 0,
+      m: 1,
+      points: [{ t: 0, m: 1 }],
+      players: [],
+      botPlan: [],
+      pot: 0,
+      load: 1,
+      hazard: H0,
+      feed: [{ k: "info", msg: "reactor online — bets open" }],
+      history: [],
+      resolution: null,
+      lastTickAt: performance.now(),
+      recentExits: [],
+      shake: false
+    };
+
+    // ---------- Audio ----------
+    let audioCtx = null;
+    const getCtx = () => {
+      if (!audioCtx) {
+        try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+      }
+      if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+      return audioCtx;
+    };
+
+    const geiger = () => {
+      if (!soundOn) return;
+      const c = getCtx(); if (!c) return;
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = "square"; o.frequency.value = 1600 + Math.random() * 1200;
+      g.gain.setValueAtTime(0.028, c.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.03);
+      o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + 0.035);
+    };
+
+    const blip = () => {
+      if (!soundOn) return;
+      const c = getCtx(); if (!c) return;
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = "sine"; o.frequency.setValueAtTime(680, c.currentTime);
+      o.frequency.exponentialRampToValueAtTime(1250, c.currentTime + 0.09);
+      g.gain.setValueAtTime(0.06, c.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.12);
+      o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + 0.13);
+    };
+
+    const boom = () => {
+      if (!soundOn) return;
+      const c = getCtx(); if (!c) return;
+      const n = c.createBufferSource();
+      const buf = c.createBuffer(1, c.sampleRate * 0.5, c.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+      n.buffer = buf;
+      const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 380;
+      const g1 = c.createGain(); g1.gain.value = 0.28;
+      n.connect(lp); lp.connect(g1); g1.connect(c.destination); n.start();
+      const o = c.createOscillator(), g2 = c.createGain();
+      o.type = "sine"; o.frequency.setValueAtTime(130, c.currentTime);
+      o.frequency.exponentialRampToValueAtTime(36, c.currentTime + 0.7);
+      g2.gain.setValueAtTime(0.22, c.currentTime);
+      g2.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.8);
+      o.connect(g2); g2.connect(c.destination); o.start(); o.stop(c.currentTime + 0.85);
+    };
+
+    // ---------- Bots Logic ----------
+    function seedLobbyBots(s) {
+      const n = 11 + ((Math.random() * 7) | 0);
+      const names = [...BOT_NAMES].sort(() => Math.random() - 0.5).slice(0, n);
+      const now = performance.now();
+      s.botPlan = names.map((name, i) => {
+        let stake = clamp(Math.exp(-1.05 + 1.2 * randn()), 0.05, 9);
+        let target = 1.1 + expRand(0.85);
+        let nerve = Math.pow(Math.random(), 1.2);
+        if (i === 0 && Math.random() < 0.22) { // Whale
+          stake = 5 + Math.random() * 12;
+          target = 1.9 + expRand(1.2);
+          nerve = 0.1;
+        }
+        if (Math.random() < 0.12) target *= 2.2; // Diamond hands
+        return {
+          joinAt: now + 400 + Math.random() * (LOBBY_MS - 2200),
+          p: {
+            id: "b" + i, name, stake: +stake.toFixed(2), isYou: false,
+            alive: true, queued: false, pending: false,
+            exitM: null, exitTick: null, payout: 0,
+            targetM: target, nerve
+          }
+        };
+      });
+    }
+
+    const pushFeed = (k, msg) => {
+      S.feed.unshift({ k, msg });
+      if (S.feed.length > 42) S.feed.pop();
+    };
+
+    // ---------- Phase Transitions ----------
+    function startLobby() {
+      S.phase = "LOBBY";
+      S.phaseEnds = performance.now() + LOBBY_MS;
+      S.round += 1;
+      S.seed = seedHex();
+      S.tick = 0; S.m = 1;
+      S.points = [{ t: 0, m: 1 }];
+      S.players = []; S.pot = 0; S.load = 1; S.hazard = H0;
+      S.resolution = null; S.recentExits = [];
+      pushFeed("info", `round ${S.round} — bets open`);
+      seedLobbyBots(S);
+    }
+
+    function startRun() {
+      S.phase = "RUN";
+      S.tick = 0; S.m = 1;
+      S.points = [{ t: 0, m: 1 }];
+      S.pot = S.players.reduce((a, p) => a + p.stake, 0);
+      S.lastTickAt = performance.now();
+      pushFeed("warn", `reaction started — pot ${fmt(S.pot)} ◎`);
+    }
+
+    function resolveMeltdown() {
+      const exiters = S.players.filter((p) => p.exitM != null);
+      const busters = S.players.filter((p) => p.alive);
+      const dead = busters.reduce((a, p) => a + p.stake, 0);
+      const prize = dead * (1 - RAKE);
+      const W = exiters.reduce((a, p) => a + p.stake * (p.exitM - 1), 0);
+      exiters.forEach((p) => {
+        const share = W > 0 ? (prize * p.stake * (p.exitM - 1)) / W : 0;
+        p.payout = p.stake + share;
+      });
+      busters.forEach((p) => { p.alive = false; p.busted = true; p.payout = 0; });
+      const you = S.players.find((p) => p.isYou);
+      let yourNet = null;
+      if (you) {
+        yourNet = (you.payout || 0) - you.stake;
+        if (you.payout > 0) balance = +(balance + you.payout).toFixed(4);
+        pnl = +(pnl + yourNet).toFixed(4);
+      }
+      S.resolution = { type: "melt", m: S.m, dead, prize, rakeAmt: dead * RAKE, yourNet };
+      S.history.unshift({ m: S.m, cold: false, yourNet });
+      if (S.history.length > 14) S.history.pop();
+      S.phase = "RESULT";
+      S.phaseEnds = performance.now() + RESULT_MS;
+      S.shake = true;
+      setTimeout(() => { S.shake = false; }, 700);
+      pushFeed("melt", `MELTDOWN @ ${fmt(S.m)}× — ${busters.length} vaporized, ${fmt(prize)} ◎ redistributed`);
+      boom();
+    }
+
+    function resolveColdShutdown() {
+      S.players.forEach((p) => { p.payout = p.stake; });
+      const you = S.players.find((p) => p.isYou);
+      let yourNet = null;
+      if (you) { yourNet = 0; balance = +(balance + you.stake).toFixed(4); }
+      S.resolution = { type: "cold", m: S.m, dead: 0, prize: 0, rakeAmt: 0, yourNet };
+      S.history.unshift({ m: S.m, cold: true, yourNet });
+      if (S.history.length > 14) S.history.pop();
+      S.phase = "RESULT";
+      S.phaseEnds = performance.now() + RESULT_MS;
+      pushFeed("info", "cold shutdown — everyone ejected, stakes returned, dead pool 0");
+    }
+
+    // ---------- Game Tick ----------
+    function gameTick() {
+      S.tick += 1;
+      S.lastTickAt = performance.now();
+      const g = G0 + GA * S.tick;
+      S.m = S.m * (1 + g);
+      S.points.push({ t: S.tick, m: S.m });
+
+      // 1) Process exits
+      let exitedNow = 0;
+      S.players.forEach((p) => {
+        if (!p.alive) return;
+        const auto = p.autoM != null && S.m >= p.autoM;
+        if (p.queued || p.pending || auto) {
+          p.alive = false;
+          p.exitM = S.m;
+          p.exitTick = S.tick;
+          exitedNow += 1;
+          if (p.isYou) {
+            pushFeed("you", `YOU ejected @ ${fmt(S.m)}×${auto && !p.queued ? " (commit)" : ""}`);
+            blip();
+          } else {
+            pushFeed("exit", `${p.name} ejected @ ${fmt(S.m)}×`);
+          }
+        }
+      });
+      if (exitedNow > 0) S.recentExits.push({ t: S.tick, n: exitedNow });
+      S.recentExits = S.recentExits.filter((e) => S.tick - e.t <= 2);
+
+      const alive = S.players.filter((p) => p.alive);
+
+      // 2) Cold Shutdown
+      if (S.players.length > 0 && alive.length === 0) {
+        resolveColdShutdown();
+        return;
+      }
+
+      // 3) Load + Hazard
+      const E = alive.reduce((a, p) => a + p.stake * S.m, 0);
+      S.load = S.pot > 0 ? E / S.pot : 1;
+      S.hazard = clamp(H0 * Math.pow(S.load, H_ALPHA) + S.tick * H_TIME, 0.0004, 0.3);
+
+      // 4) Bot decisions for NEXT tick
+      const cascadeN = S.recentExits.reduce((a, e) => a + e.n, 0);
+      const cascade = alive.length > 0 && (cascadeN >= 3 || cascadeN / (alive.length + cascadeN) > 0.3);
+      alive.forEach((p) => {
+        if (p.isYou || p.pending) return;
+        if (S.m >= p.targetM) { p.pending = true; return; }
+        if (S.hazard > 0.012 && S.m > 1.12) {
+          const panicP = p.nerve * (cascade ? 0.3 : 0.1);
+          if (Math.random() < panicP) p.pending = true;
+        }
+      });
+
+      // 5) Geiger ticks
+      if (soundOn && getCtx()) {
+        let n = S.hazard * 45;
+        let count = Math.floor(n) + (Math.random() < n % 1 ? 1 : 0);
+        for (let i = 0; i < count; i++) setTimeout(geiger, Math.random() * TICK_MS);
+      }
+
+      // 6) The Roll
+      if (Math.random() < S.hazard) {
+        resolveMeltdown();
+      }
+    }
+
+    // ---------- Actions ----------
+    const armStake = () => {
+      getCtx();
+      const you = S.players.find((p) => p.isYou);
+      const bet = parseFloat(betStr);
+      const betOk = !isNaN(bet) && bet >= 0.05 && bet <= balance;
+      if (S.phase !== "LOBBY" || you || !betOk) return;
+
+      const auto = parseFloat(autoStr);
+      const autoM = !isNaN(auto) && auto > 1.01 ? auto : null;
+
+      balance = +(balance - bet).toFixed(4);
+      S.players.push({
+        id: "you", name: "YOU", stake: +bet.toFixed(2), isYou: true,
+        alive: true, queued: false, pending: false,
+        exitM: null, exitTick: null, payout: 0, autoM
+      });
+      S.pot += +bet.toFixed(2);
+      pushFeed("you", `YOU armed ${fmt(bet)} ◎${autoM ? ` — sealed commit @ ${fmt(autoM)}×` : ""}`);
+      blip();
+      renderDOM();
+    };
+
+    const eject = () => {
+      getCtx();
+      const you = S.players.find((p) => p.isYou);
+      if (S.phase !== "RUN" || !you || !you.alive || you.queued) return;
+      you.queued = true;
+      pushFeed("you", "EJECT queued — clears next tick");
+      blip();
+      renderDOM();
+    };
+
+    const toggleSound = () => {
+      getCtx();
+      soundOn = !soundOn;
+      document.getElementById("sound-btn").innerText = soundOn ? "SOUND ON" : "SOUND OFF";
+    };
+
+    // ---------- DOM Rendering ----------
+    const feedCol = { bet: C.dim, exit: C.green, you: C.cyan, warn: C.amber, melt: C.red, info: C.dim };
+
+    function renderDOM() {
+      const now = performance.now();
+      const secsLeft = Math.max(0, Math.ceil((S.phaseEnds - now) / 1000));
+      const you = S.players.find((p) => p.isYou);
+      const aliveList = S.players.filter((p) => p.alive);
+      const cascadeN = S.recentExits.reduce((a, e) => a + e.n, 0);
+      const whaleIn = S.pot > 0 && aliveList.some((p) => p.stake > 0.25 * S.pot);
+
+      // Header
+      document.getElementById("round-info").innerText = `ROUND ${String(S.round).padStart(4, "0")} · tape ${S.seed}… · tick ${TICK_MS}ms · rake ${RAKE * 100}% dead pool only`;
+      document.getElementById("bal-display").innerText = `${fmt(balance)} ◎`;
+      const pnlEl = document.getElementById("pnl-display");
+      pnlEl.innerText = `${pnl >= 0 ? "+" : ""}${fmt(pnl)} ◎ session`;
+      pnlEl.style.color = pnl >= 0 ? C.green : C.red;
+
+      // Shake animation
+      const appDiv = document.getElementById("app");
+      if (S.shake) appDiv.classList.add("cm-shake");
+      else appDiv.classList.remove("cm-shake");
+
+      // Annunciators
+      const lamps = [
+        { label: "BETS OPEN", on: S.phase === "LOBBY", col: C.green },
+        { label: "REACTION", on: S.phase === "RUN", col: C.amber },
+        { label: "LOAD > 1.0", on: S.phase === "RUN" && S.load > 1, col: C.amber },
+        { label: "HIGH HAZARD", on: S.phase === "RUN" && S.hazard > 0.015, col: C.red },
+        { label: "CASCADE", on: S.phase === "RUN" && cascadeN >= 3, col: C.red },
+        { label: "WHALE IN CORE", on: S.phase !== "RESULT" && whaleIn, col: C.cyan },
+        { label: "COLD SHUTDOWN", on: S.resolution?.type === "cold", col: C.cyan },
+        { label: "MELTDOWN", on: S.resolution?.type === "melt", col: C.red }
+      ];
+
+      const annEl = document.getElementById("annunciators");
+      annEl.innerHTML = lamps.map((l) => `
+        <div class="${l.on ? "cm-lamp-on" : ""}" style="
+          font-family: 'Oswald', sans-serif; letter-spacing: 0.1em; font-size: 11px; text-align: center;
+          padding: 8px 4px; border: 1px solid ${l.on ? l.col : C.edge};
+          background: ${l.on ? l.col + "22" : C.panel2}; color: ${l.on ? l.col : "#3a434b"};
+          box-shadow: ${l.on ? `0 0 14px ${l.col}44, inset 0 0 8px ${l.col}22` : "inset 0 2px 6px #00000066"};
+        ">${l.label}</div>
+      `).join("");
+
+      // Readout
+      const bigReadout = document.getElementById("big-readout");
+      if (S.phase === "LOBBY") {
+        bigReadout.innerHTML = `
+          <div style="font-size: 13px; color: ${C.dim}; letter-spacing: 0.2em;">BETS OPEN</div>
+          <div style="font-size: 44px; font-weight: 700; color: ${C.green};">${secsLeft}s</div>
+          <div style="font-size: 12px; color: ${C.dim};">pot forming: ${fmt(S.pot)} ◎ · ${S.players.length} in</div>
+        `;
+      } else if (S.phase === "RUN") {
+        bigReadout.innerHTML = `
+          <div class="${S.hazard > 0.02 ? "cm-pulse" : ""}" style="font-size: 52px; font-weight: 700; color: ${S.hazard > 0.02 ? C.red : C.amberHot}; text-shadow: 0 0 24px ${S.hazard > 0.02 ? C.red : C.amberHot}66;">
+            ${fmt(S.m)}×
+          </div>
+          <div style="font-size: 12px; color: ${C.dim};">
+            ${aliveList.length} live · ${fmt(aliveList.reduce((a, p) => a + p.stake * S.m, 0))} ◎ exposed
+          </div>
+        `;
+      } else if (S.phase === "RESULT" && S.resolution) {
+        bigReadout.innerHTML = `
+          <div style="font-size: 13px; letter-spacing: 0.2em; color: ${S.resolution.type === "melt" ? C.red : C.cyan};">
+            ${S.resolution.type === "melt" ? "MELTDOWN" : "COLD SHUTDOWN"}
+          </div>
+          <div style="font-size: 46px; font-weight: 700; color: ${S.resolution.type === "melt" ? C.red : C.cyan};">
+            ${fmt(S.resolution.m)}×
+          </div>
+        `;
+      }
+
+      // Resolution Card
+      const resCard = document.getElementById("resolution-card");
+      if (S.phase === "RESULT" && S.resolution) {
+        resCard.style.display = "block";
+        const sorted = [...S.players].sort((a, b) => (a.isYou ? -1 : b.isYou ? 1 : 0));
+        resCard.innerHTML = `
+          <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 6px; color: ${C.dim};">
+            <span>dead pool <b style="color: ${C.red};">${fmt(S.resolution.dead)} ◎</b></span>
+            <span>redistributed <b style="color: ${C.green};">${fmt(S.resolution.prize)} ◎</b></span>
+            <span>rake <b style="color: ${C.amber};">${fmt(S.resolution.rakeAmt)} ◎</b></span>
+            ${S.resolution.yourNet != null ? `
+              <span style="margin-left: auto;">YOUR NET 
+                <b style="color: ${S.resolution.yourNet > 0 ? C.green : S.resolution.yourNet < 0 ? C.red : C.cyan};">
+                  ${S.resolution.yourNet >= 0 ? "+" : ""}${fmt(S.resolution.yourNet)} ◎
+                </b>
+              </span>` : ""}
+            <span style="color: ${C.dim};">next round in ${secsLeft}s</span>
+          </div>
+          ${sorted.map(p => `
+            <div style="display: flex; gap: 8px; padding: 2px 0; border-top: 1px solid ${C.edge}55; color: ${p.isYou ? C.cyan : C.text};">
+              <span style="width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.name}</span>
+              <span style="width: 70px; color: ${C.dim};">${fmt(p.stake)} ◎</span>
+              <span style="width: 90px; color: ${p.exitM != null ? C.green : C.red};">
+                ${p.exitM != null ? `@ ${fmt(p.exitM)}×` : "☠ busted"}
+              </span>
+              <span style="margin-left: auto; color: ${p.payout - p.stake > 0.0001 ? C.green : p.payout === 0 ? C.red : C.dim};">
+                ${p.payout === 0 ? `-${fmt(p.stake)}` : `${p.payout - p.stake >= 0 ? "+" : ""}${fmt(p.payout - p.stake)}`} ◎
+              </span>
+            </div>
+          `).join("")}
+        `;
+      } else {
+        resCard.style.display = "none";
+      }
+
+      // Controls Panel
+      const ctrlPanel = document.getElementById("controls-panel");
+      const bet = parseFloat(betStr);
+      const betOk = !isNaN(bet) && bet >= 0.05 && bet <= balance;
+
+      if (S.phase === "LOBBY" && !you) {
+        ctrlPanel.innerHTML = `
+          <div>
+            <div style="font-size: 10px; color: ${C.dim}; letter-spacing: 0.15em; margin-bottom: 4px;">STAKE ◎</div>
+            <input class="cm" id="bet-input" value="${betStr}" inputmode="decimal" />
+          </div>
+          <div style="display: flex; gap: 4px;">
+            ${[0.1, 0.5, 1, 2].map(v => `<button class="btn-quick" onclick="setBet('${v}')">${v}</button>`).join("")}
+          </div>
+          <div>
+            <div style="font-size: 10px; color: ${C.dim}; letter-spacing: 0.15em; margin-bottom: 4px;">
+              SEALED COMMIT ×<span style="color: ${C.dim};"> (optional auto-eject)</span>
+            </div>
+            <input class="cm" id="auto-input" value="${autoStr}" placeholder="e.g. 2.00" inputmode="decimal" />
+          </div>
+          <button class="btn-arm" onclick="armStake()" ${!betOk ? "disabled" : ""}>ARM STAKE</button>
+          ${!betOk ? `<span style="font-size: 11px; color: ${C.dim};">min 0.05 ◎, max your balance</span>` : ""}
+        `;
+
+        document.getElementById("bet-input").addEventListener("input", (e) => { betStr = e.target.value; renderDOM(); });
+        document.getElementById("auto-input").addEventListener("input", (e) => { autoStr = e.target.value; });
+      } else if (S.phase === "LOBBY" && you) {
+        ctrlPanel.innerHTML = `
+          <div style="font-size: 13px; color: ${C.green};">
+            ARMED ${fmt(you.stake)} ◎${you.autoM ? ` · sealed commit @ ${fmt(you.autoM)}× (hidden from table)` : " · no commit — manual eject only"}
+          </div>
+        `;
+      } else if (S.phase === "RUN" && you && you.alive) {
+        ctrlPanel.innerHTML = `
+          <button class="${you.queued ? "btn-eject-queued" : "btn-eject"}" onclick="eject()" ${you.queued ? "disabled" : ""}>
+            ${you.queued ? "EJECT QUEUED — NEXT TICK" : "EJECT"}
+          </button>
+        `;
+      } else if (S.phase === "RUN" && you && !you.alive && you.exitM != null) {
+        ctrlPanel.innerHTML = `<div style="font-size: 14px; color: ${C.cyan};">Out @ ${fmt(you.exitM)}× — your weight grows if others bust. Watch the core.</div>`;
+      } else if (S.phase === "RUN" && you && !you.alive && you.exitM == null) {
+        ctrlPanel.innerHTML = `<div style="font-size: 14px; color: ${C.red};">Vaporized.</div>`;
+      } else if (S.phase === "RUN" && !you) {
+        ctrlPanel.innerHTML = `<div style="font-size: 13px; color: ${C.dim};">SPECTATING — arm a stake next lobby</div>`;
+      } else if (S.phase === "RESULT") {
+        ctrlPanel.innerHTML = `<div style="font-size: 13px; color: ${C.dim};">Round settled. Bets reopen shortly.</div>`;
+      }
+
+      // History
+      const histEl = document.getElementById("history-pills");
+      histEl.innerHTML = S.history.length === 0 ? `<span style="font-size: 11px; color: ${C.dim};">—</span>` :
+        S.history.map(h => `
+          <span style="font-size: 11px; padding: 3px 8px; border: 1px solid ${C.edge}; background: ${C.panel2}; color: ${h.cold ? C.cyan : h.m < 1.5 ? C.red : h.m < 3 ? C.amber : C.green};">
+            ${h.cold ? "CS" : fmt(h.m) + "×"}
+          </span>
+        `).join("");
+
+      // Core Load Stats
+      const loadPct = clamp(S.load / 2.5, 0, 1);
+      const loadCol = S.load < 0.9 ? C.green : S.load < 1.4 ? C.amber : C.red;
+      document.getElementById("load-val").innerText = fmt(S.load);
+      document.getElementById("load-val").style.color = loadCol;
+      document.getElementById("hazard-val").innerText = `${fmt(S.hazard * 100)}%`;
+      document.getElementById("hazard-val").style.color = S.hazard > 0.015 ? C.red : C.amber;
+      document.getElementById("load-bar").style.width = `${loadPct * 100}%`;
+      document.getElementById("m-desc").innerText = fmt(S.m);
+
+      // Table Header & Rows
+      document.getElementById("table-header").innerText = `THE TABLE · pot ${fmt(S.pot)} ◎`;
+      const sortedPlayers = [...S.players].sort((a, b) => {
+        if (a.isYou) return -1;
+        if (b.isYou) return 1;
+        const rank = (p) => (p.alive ? 0 : p.exitM != null ? 1 : 2);
+        return rank(a) - rank(b) || b.stake - a.stake;
+      });
+
+      const tableEl = document.getElementById("table-rows");
+      if (sortedPlayers.length === 0) {
+        tableEl.innerHTML = `<div style="font-size: 12px; color: ${C.dim};">empty core</div>`;
+      } else {
+        tableEl.innerHTML = sortedPlayers.map(p => {
+          let stTxt = "LIVE", stCol = C.amber;
+          if (p.exitM != null) { stTxt = `EJ @ ${fmt(p.exitM)}×`; stCol = p.isYou ? C.cyan : C.green; }
+          else if (p.busted) { stTxt = "VAPORIZED"; stCol = C.red; }
+          else if (p.queued) { stTxt = "EJECT QUEUED"; stCol = C.cyan; }
+
+          return `
+            <div style="display: flex; gap: 8px; font-size: 12px; padding: 3px 0; border-top: 1px solid ${C.edge}44; color: ${p.isYou ? C.cyan : C.text};">
+              <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                ${p.name}${S.pot > 0 && p.stake > 0.25 * S.pot ? " 🐋" : ""}
+              </span>
+              <span style="width: 64px; text-align: right; color: ${C.dim};">${fmt(p.stake)} ◎</span>
+              <span class="${stTxt === "LIVE" ? "cm-pulse" : ""}" style="width: 104px; text-align: right; color: ${stCol};">
+                ${stTxt}
+              </span>
+            </div>
+          `;
+        }).join("");
+      }
+
+      // Event Log
+      const feedEl = document.getElementById("feed-list");
+      feedEl.innerHTML = S.feed.map((f, i) => `
+        <div style="font-size: 11px; color: ${feedCol[f.k] || C.text}; padding: 1px 0; opacity: ${i === 0 ? 1 : 0.85};">
+          ${f.msg}
+        </div>
+      `).join("");
+    }
+
+    window.setBet = (v) => { betStr = v; renderDOM(); };
+
+    // ---------- Canvas Graph Loop ----------
+    const canvas = document.getElementById("scope-canvas");
+    const wrap = document.getElementById("scope-wrap");
+
+    function drawCanvas() {
+      requestAnimationFrame(drawCanvas);
+      if (!canvas || !wrap) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      const W = wrap.clientWidth, H = wrap.clientHeight;
+      if (canvas.width !== W * dpr || canvas.height !== H * dpr) {
+        canvas.width = W * dpr; canvas.height = H * dpr;
+        canvas.style.width = W + "px"; canvas.style.height = H + "px";
+      }
+
+      const x = canvas.getContext("2d");
+      x.setTransform(dpr, 0, 0, dpr, 0, 0);
+      x.clearRect(0, 0, W, H);
+
+      const pad = { l: 44, r: 14, t: 18, b: 22 };
+      const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
+
+      let mLive = S.m;
+      if (S.phase === "RUN") {
+        const frac = clamp((performance.now() - S.lastTickAt) / TICK_MS, 0, 1);
+        mLive = S.m * Math.pow(1 + G0 + GA * (S.tick + 1), frac);
+      }
+      const mMax = Math.max(2, Math.max(mLive, ...S.points.map((p) => p.m)) * 1.18);
+      const tMax = Math.max(24, S.tick + 3);
+      const X = (t) => pad.l + (t / tMax) * iw;
+      const Y = (m) => pad.t + ih - (Math.log(m) / Math.log(mMax)) * ih;
+
+      // Graticule
+      x.strokeStyle = C.grid; x.lineWidth = 1; x.fillStyle = C.dim;
+      x.font = "10px 'IBM Plex Mono', ui-monospace, monospace";
+      [1, 1.2, 1.5, 2, 3, 4, 5, 7, 10, 15, 20, 30, 50].forEach((gm) => {
+        if (gm > mMax) return;
+        const y = Y(gm);
+        x.globalAlpha = gm === 1 ? 0.9 : 0.5;
+        x.beginPath(); x.moveTo(pad.l, y); x.lineTo(W - pad.r, y); x.stroke();
+        x.globalAlpha = 1;
+        x.fillText(gm + "×", 8, y + 3);
+      });
+      for (let t = 0; t <= tMax; t += Math.ceil(tMax / 8)) {
+        x.globalAlpha = 0.25;
+        x.beginPath(); x.moveTo(X(t), pad.t); x.lineTo(X(t), H - pad.b); x.stroke();
+        x.globalAlpha = 1;
+      }
+
+      if (S.phase === "LOBBY" && S.points.length <= 1) return;
+
+      // Curve
+      const pts = [...S.points];
+      if (S.phase === "RUN") pts.push({ t: S.tick + clamp((performance.now() - S.lastTickAt) / TICK_MS, 0, 1), m: mLive });
+      const melted = S.resolution && S.resolution.type === "melt";
+      const col = melted ? C.red : C.amberHot;
+
+      // Area fill
+      const grad = x.createLinearGradient(0, pad.t, 0, H - pad.b);
+      grad.addColorStop(0, melted ? "rgba(255,75,62,0.20)" : "rgba(255,159,28,0.18)");
+      grad.addColorStop(1, "rgba(0,0,0,0)");
+      x.beginPath();
+      x.moveTo(X(pts[0].t), Y(pts[0].m));
+      pts.forEach((p) => x.lineTo(X(p.t), Y(p.m)));
+      x.lineTo(X(pts[pts.length - 1].t), H - pad.b);
+      x.lineTo(X(pts[0].t), H - pad.b);
+      x.closePath(); x.fillStyle = grad; x.fill();
+
+      // Glow stroke
+      x.beginPath();
+      x.moveTo(X(pts[0].t), Y(pts[0].m));
+      pts.forEach((p) => x.lineTo(X(p.t), Y(p.m)));
+      x.strokeStyle = col; x.lineWidth = 2.4;
+      x.shadowColor = col; x.shadowBlur = 14;
+      x.stroke(); x.shadowBlur = 0;
+
+      // Exit markers
+      S.players.forEach((p) => {
+        if (p.exitM == null) return;
+        const px = X(p.exitTick), py = Y(p.exitM);
+        x.beginPath(); x.arc(px, py, p.isYou ? 4.5 : 3, 0, Math.PI * 2);
+        x.fillStyle = p.isYou ? C.cyan : C.green;
+        x.shadowColor = x.fillStyle; x.shadowBlur = 8; x.fill(); x.shadowBlur = 0;
+      });
+
+      // Meltdown burst
+      if (melted) {
+        const last = pts[pts.length - 1];
+        const px = X(last.t), py = Y(last.m);
+        x.strokeStyle = C.red; x.lineWidth = 1.5; x.setLineDash([4, 4]);
+        x.beginPath(); x.moveTo(px, pad.t); x.lineTo(px, H - pad.b); x.stroke();
+        x.setLineDash([]);
+        x.beginPath(); x.arc(px, py, 7, 0, Math.PI * 2);
+        x.fillStyle = C.red; x.shadowColor = C.red; x.shadowBlur = 20; x.fill();
+        x.shadowBlur = 0;
+      }
+    }
+
+    // ---------- Initialization ----------
+    document.getElementById("sound-btn").addEventListener("click", toggleSound);
+
+    seedLobbyBots(S);
+    renderDOM();
+    requestAnimationFrame(drawCanvas);
+
+    // Master Game Loop Interval
+    setInterval(() => {
+      const now = performance.now();
+      if (S.phase === "LOBBY") {
+        S.botPlan = S.botPlan.filter((b) => {
+          if (b.joinAt <= now) {
+            S.players.push(b.p);
+            S.pot += b.p.stake;
+            pushFeed("bet", `${b.p.name} armed ${fmt(b.p.stake)} ◎`);
+            if (b.p.stake >= 5) pushFeed("warn", `heavy stake in the core: ${b.p.name}`);
+            return false;
+          }
+          return true;
+        });
+        if (now >= S.phaseEnds) startRun();
+      } else if (S.phase === "RUN") {
+        gameTick();
+      } else if (S.phase === "RESULT") {
+        if (now >= S.phaseEnds) startLobby();
+      }
+      renderDOM();
+    }, TICK_MS);
+  </script>
+</body>
+</html>
