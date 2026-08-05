@@ -1,1 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CRITICAL MASS — reactor floor</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Oswald:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0e1216; --panel:#181d23; --panel2:#141920; --edge:#2a3138;
+  --amber:#ffb347; --hot:#ff9f1c; --red:#ff4b3e; --green:#6fcf8f;
+  --cyan:#79d2e6; --gold:#ffd75e; --text:#e8e2d4; --dim:#6b7480; --grid:#243036;
+}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(1200px 700px at 50% -12%,#17202a 0%,var(--bg) 55%);
+  color:var(--text);font-family:'IBM Plex Mono',ui-monospace,Menlo,monospace;padding:14px}
+h1{font-family:'Oswald',sans-serif;font-weight:600;font-size:22px;letter-spacing:.22em;margin:0}
+h1 span{color:var(--hot)}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.panel{background:var(--panel);border:1px solid var(--edge)}
+.lbl{font-size:10px;letter-spacing:.15em;color:var(--dim);margin-bottom:6px}
+.mono-big{font-size:26px;font-weight:700;line-height:1}
+button{font-family:'Oswald',sans-serif;letter-spacing:.12em;border:1px solid var(--edge);
+  background:var(--panel2);color:var(--text);padding:10px 16px;cursor:pointer;font-size:14px;text-transform:uppercase}
+button:disabled{cursor:not-allowed;opacity:.5}
+button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+input{background:var(--panel2);border:1px solid var(--edge);color:var(--text);
+  font-family:'IBM Plex Mono',monospace;font-size:14px;padding:9px 10px;width:118px}
+input:focus{outline:2px solid var(--amber);outline-offset:-1px}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:var(--edge)}
+@keyframes shake{0%,100%{transform:translate(0,0)}20%{transform:translate(-6px,3px)}
+ 40%{transform:translate(5px,-4px)}60%{transform:translate(-4px,-2px)}80%{transform:translate(3px,4px)}}
+.shake{animation:shake .45s linear 1}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.42}}
+.pulse{animation:pulse 1.1s ease-in-out infinite}
+@keyframes lamp{0%,100%{filter:brightness(1)}50%{filter:brightness(1.4)}}
+.lamp.on{animation:lamp 1.4s ease-in-out infinite}
+@keyframes goldshine{0%,100%{box-shadow:0 0 18px #ffd75e44,inset 0 0 10px #ffd75e22}
+ 50%{box-shadow:0 0 34px #ffd75e88,inset 0 0 18px #ffd75e44}}
+.jack{animation:goldshine 2.4s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.shake,.pulse,.lamp.on,.jack{animation:none!important}}
+.lamp{font-family:'Oswald',sans-serif;letter-spacing:.1em;font-size:11px;text-align:center;
+  padding:8px 4px;border:1px solid var(--edge);background:var(--panel2);color:#39424a;
+  box-shadow:inset 0 2px 6px #00000066}
+#lamps{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:6px;margin:10px 0 12px}
+.trow{display:flex;gap:8px;font-size:12px;padding:3px 0;border-top:1px solid #2a313844}
+.trow .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pillrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.pill{font-size:11px;padding:3px 8px;border:1px solid var(--edge);background:var(--panel2)}
+#feed div{font-size:11px;padding:1px 0}
+.scroll{overflow-y:auto}
+.foot{margin-top:12px;font-size:10px;color:var(--dim);line-height:1.7;max-width:1100px}
+</style>
+</head>
+<body>
 
+<div class="row" style="align-items:baseline;margin-bottom:10px">
+  <h1>CRITICAL<span> MASS</span></h1>
+  <div id="hdr" style="color:var(--dim);font-size:12px"></div>
+  <div style="margin-left:auto" class="row">
+    <span style="font-size:13px">BAL <b id="bal" style="color:var(--amber)"></b></span>
+    <span style="font-size:13px" id="pnl"></span>
+    <button id="snd" style="padding:5px 10px;font-size:11px">SOUND ON</button>
+  </div>
+</div>
+
+<div id="lamps"></div>
+
+<div class="row" style="align-items:stretch">
+  <!-- LEFT -->
+  <div style="flex:1 1 580px;min-width:320px;display:flex;flex-direction:column;gap:12px">
+    <div id="scopewrap" class="panel" style="position:relative;height:350px;box-shadow:inset 0 0 40px #00000088">
+      <canvas id="cv" style="position:absolute;inset:0"></canvas>
+      <div id="readout" style="position:absolute;top:12px;left:0;right:0;text-align:center;pointer-events:none"></div>
+      <div id="settle" class="scroll" style="position:absolute;left:10px;right:10px;bottom:10px;max-height:196px;
+        background:#10151aee;border:1px solid var(--edge);padding:10px;font-size:12px;display:none"></div>
+    </div>
+
+    <div class="panel" style="padding:12px" id="ctrl"></div>
+
+    <div class="pillrow">
+      <span class="lbl" style="margin:0">LAST ROUNDS</span>
+      <span id="hist" class="pillrow"></span>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div style="flex:1 1 330px;min-width:300px;display:flex;flex-direction:column;gap:12px">
+
+    <!-- BONANZA -->
+    <div class="panel jack" style="padding:12px;border-color:var(--gold)">
+      <div class="lbl" style="color:var(--gold)">BONANZA POOL — paid only to players still in the core</div>
+      <div class="row" style="align-items:baseline;justify-content:space-between">
+        <span class="mono-big" style="color:var(--gold)" id="jackv"></span>
+        <span style="font-size:11px;color:var(--dim)" id="jackodds"></span>
+      </div>
+      <div style="font-size:10px;color:var(--dim);margin-top:6px">
+        Grows from rounds where nobody escapes. Eject and you forfeit your claim.
+      </div>
+    </div>
+
+    <!-- YOUR POSITION -->
+    <div class="panel" style="padding:12px;border-color:var(--cyan)">
+      <div class="lbl" style="color:var(--cyan)">YOUR POSITION</div>
+      <div id="pos" style="font-size:12px;line-height:1.9"></div>
+    </div>
+
+    <!-- CORE -->
+    <div class="panel" style="padding:12px">
+      <div class="row" style="justify-content:space-between" class="lbl">
+        <span class="lbl" style="margin:0">CORE LOAD</span>
+        <span class="lbl" style="margin:0">MELTDOWN / TICK</span>
+      </div>
+      <div class="row" style="justify-content:space-between;align-items:baseline;margin:4px 0 6px">
+        <span class="mono-big" id="loadv"></span><span class="mono-big" id="hazv"></span>
+      </div>
+      <div style="position:relative;height:14px;background:var(--panel2);border:1px solid var(--edge)">
+        <div id="loadbar" style="position:absolute;top:1px;bottom:1px;left:1px;width:0;
+          background:linear-gradient(90deg,var(--green),var(--amber) 55%,var(--red));transition:width .25s linear"></div>
+        <div style="position:absolute;left:40%;top:-3px;bottom:-3px;width:1px;background:var(--text);opacity:.55"></div>
+      </div>
+      <div style="font-size:10px;color:var(--dim);margin-top:6px" id="loadnote"></div>
+    </div>
+
+    <div class="panel scroll" style="padding:12px;max-height:230px">
+      <div class="lbl" id="tablehdr"></div><div id="table"></div>
+    </div>
+
+    <div class="panel scroll" style="padding:12px;flex:1;min-height:130px;max-height:200px">
+      <div class="lbl">EVENT LOG — THIS ROUND</div><div id="feed"></div>
+    </div>
+  </div>
+</div>
+
+<div class="foot" id="foot"></div>
+
+<script>
+/* ================= CRITICAL MASS v2 =================
+   crowd-coupled hazard crash + Bonanza jackpot
+   ==================================================== */
+const TICK=300, LOBBY=9000, RESULT=11500;
+const G0=0.006, GA=0.00012;            // multiplier growth
+const H0=0.0022, ALPHA=2.2, HT=0.00005;// hazard: H0 * load^ALPHA
+const RAKE=0.04;                        // on dead pool only
+const QBON=0.10;                        // base share of events that are Bonanza
+const BON_PAY=0.75;                     // fraction of jackpot paid when it fires
+const MAXBET=0.15;                      // no wallet may exceed 15% of pot
+const START_BAL=10;
+
+const NAMES=["latency_god","glass_hands","kerem.sol","panic_wojak","curve_priest","dead_inside",
+"fomo_kaan","perma_bull","kimchi_prem","0x_serpent","wagmi_ratio","sniper_ay","rug_survivor",
+"one_more_trade","exit_liq","brainlet_cap","dip_buyer","cold_rod","median_enjoyer","tick_merchant",
+"core_hugger","last_out_wins"];
+
+const $=id=>document.getElementById(id);
+const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
+const f=(x,d=2)=>(Math.round(x*10**d)/10**d).toFixed(d);
+const randn=()=>{let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
+const expo=m=>-m*Math.log(Math.max(1e-9,Math.random()));
+const hexid=()=>Array.from({length:8},()=>"0123456789abcdef"[Math.random()*16|0]).join("");
+
+let bal=START_BAL, pnl=0, sound=true;
+const S={phase:"LOBBY",ends:performance.now()+LOBBY,round:412,seed:hexid(),tick:0,m:1,
+  pts:[{t:0,m:1}],players:[],plan:[],pot:0,load:1,haz:H0,jack:0,feed:[],hist:[],res:null,
+  lastTick:performance.now(),recent:[]};
+
+/* ---------- audio ---------- */
+let AC=null;
+const ac=()=>{if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}
+  if(AC&&AC.state==="suspended")AC.resume();return AC};
+function tone(freq,to,dur,type,vol){if(!sound||!AC)return;
+  const o=AC.createOscillator(),g=AC.createGain();o.type=type;
+  o.frequency.setValueAtTime(freq,AC.currentTime);
+  if(to)o.frequency.exponentialRampToValueAtTime(to,AC.currentTime+dur);
+  g.gain.setValueAtTime(vol,AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(.0001,AC.currentTime+dur);
+  o.connect(g);g.connect(AC.destination);o.start();o.stop(AC.currentTime+dur+.02)}
+const geiger=()=>tone(1600+Math.random()*1200,null,.03,"square",.026);
+const blip=()=>{ac();tone(680,1250,.11,"sine",.06)};
+function boom(){if(!sound||!AC)return;
+  const n=AC.createBufferSource(),b=AC.createBuffer(1,AC.sampleRate*.5,AC.sampleRate),d=b.getChannelData(0);
+  for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length);
+  n.buffer=b;const lp=AC.createBiquadFilter();lp.type="lowpass";lp.frequency.value=380;
+  const g=AC.createGain();g.gain.value=.3;n.connect(lp);lp.connect(g);g.connect(AC.destination);n.start();
+  tone(130,36,.75,"sine",.22)}
+function chime(){if(!sound||!AC)return;[523,659,784,1046,1318].forEach((fr,i)=>
+  setTimeout(()=>tone(fr,fr*1.5,.5,"triangle",.09),i*85))}
+
+/* ---------- feed ---------- */
+const say=(k,msg)=>{S.feed.unshift({k,msg});if(S.feed.length>40)S.feed.pop()};
+
+/* ---------- bots ---------- */
+function planBots(){
+  const n=11+(Math.random()*8|0), pool=[...NAMES].sort(()=>Math.random()-.5).slice(0,n), now=performance.now();
+  // fatter jackpot => crowd gets greedier (they're hunting it)
+  const greed=1+.55*Math.min(1.5,S.jack/Math.max(S.pot||8,1));
+  S.plan=pool.map((name,i)=>{
+    let stake=clamp(Math.exp(-1.05+1.2*randn()),.05,9);
+    let target=(1.1+expo(.95))*greed, nerve=Math.pow(Math.random(),1.2);
+    if(i===0&&Math.random()<.35){stake=5+Math.random()*14;target=(1.9+expo(1.2))*greed;nerve=.12}
+    if(Math.random()<.12)target*=2.2;
+    return{at:now+400+Math.random()*(LOBBY-2400),
+      p:{id:"b"+i,name,stake:+stake.toFixed(2),you:false,alive:true,pend:false,q:false,
+         exitM:null,exitT:null,pay:0,target,nerve}}});
+}
+
+/* ---------- phases ---------- */
+function lobby(){
+  S.phase="LOBBY";S.ends=performance.now()+LOBBY;S.round++;S.seed=hexid();
+  S.tick=0;S.m=1;S.pts=[{t:0,m:1}];S.players=[];S.pot=0;S.load=1;S.haz=H0;
+  S.res=null;S.recent=[];S.feed=[];
+  say("info",`round ${S.round} — bets open`);planBots();
+}
+function applyCap(){
+  for(let i=0;i<8;i++){
+    const cap=MAXBET*S.pot; let over=false;
+    S.players.forEach(p=>{if(p.stake>cap+1e-9){
+      const back=p.stake-cap;p.stake=cap;over=true;
+      if(p.you){bal=+(bal+back).toFixed(4);say("you",`bet cap — ${f(back)} ◎ refunded (max ${f(cap)} ◎ = 15% of pot)`)}
+      else say("info",`${p.name} scaled to cap ${f(cap)} ◎`)}});
+    S.pot=S.players.reduce((a,p)=>a+p.stake,0);
+    if(!over)break;
+  }
+}
+function startRun(){
+  applyCap();
+  if(S.players.length<2){say("info","not enough players — reopening bets");
+    S.players.forEach(p=>{if(p.you)bal=+(bal+p.stake).toFixed(4)});lobby();return}
+  S.phase="RUN";S.tick=0;S.m=1;S.pts=[{t:0,m:1}];S.lastTick=performance.now();
+  say("warn",`reaction started — pot ${f(S.pot)} ◎ · bonanza ${f(S.jack)} ◎ in play`);
+}
+
+/* ---------- live payout previews (the thing you asked for) ---------- */
+const aliveOf=()=>S.players.filter(p=>p.alive);
+const outOf=()=>S.players.filter(p=>p.exitM!=null);
+function previewMelt(p){                     // what an EJECTED player takes if it blows right now
+  const dead=aliveOf().reduce((a,q)=>a+q.stake,0);
+  const W=outOf().reduce((a,q)=>a+q.stake*(q.exitM-1),0);
+  if(W<=0)return p.stake;
+  return p.stake+dead*(1-RAKE)*p.stake*(p.exitM-1)/W;
+}
+function previewBonanza(p){                  // what a LIVE player takes if the bonanza fires right now
+  const W=aliveOf().reduce((a,q)=>a+q.stake*S.m,0);
+  if(W<=0)return p.stake;
+  return p.stake+S.jack*BON_PAY*p.stake*S.m/W;
+}
+
+/* ---------- resolution ---------- */
+function resolve(kind){
+  const outs=outOf(), alive=aliveOf();
+  let dead=0,prize=0,rake=0,bon=0,orphan=false;
+  if(kind==="bonanza"){
+    bon=S.jack*BON_PAY; S.jack-=bon;
+    const W=alive.reduce((a,p)=>a+p.stake*S.m,0);
+    alive.forEach(p=>{p.pay=p.stake+bon*p.stake*S.m/W;p.won=true});
+    outs.forEach(p=>{p.pay=p.stake});
+  }else if(kind==="cold"){
+    S.players.forEach(p=>p.pay=p.stake);
+  }else{
+    dead=alive.reduce((a,p)=>a+p.stake,0);
+    rake=dead*RAKE;
+    const W=outs.reduce((a,p)=>a+p.stake*(p.exitM-1),0);
+    if(W<=0){ orphan=true; S.jack+=dead-rake; S.players.forEach(p=>p.pay=0) }
+    else{ prize=dead-rake;
+      outs.forEach(p=>p.pay=p.stake+prize*p.stake*(p.exitM-1)/W);
+      alive.forEach(p=>{p.pay=0;p.dead=true}) }
+  }
+  const you=S.players.find(p=>p.you); let net=null;
+  if(you){net=+(you.pay-you.stake).toFixed(4);bal=+(bal+you.pay).toFixed(4);pnl=+(pnl+net).toFixed(4)}
+  S.res={kind,m:S.m,dead,prize,rake,bon,orphan,net};
+  S.hist.unshift({m:S.m,kind,net});if(S.hist.length>14)S.hist.pop();
+  S.phase="RESULT";S.ends=performance.now()+RESULT;
+  if(kind==="melt"){boom();$("scopewrap").classList.add("shake");
+    setTimeout(()=>$("scopewrap").classList.remove("shake"),480);
+    say("melt",orphan?`MELTDOWN @ ${f(S.m)}× — NOBODY ESCAPED. entire pot rolls into the Bonanza`
+      :`MELTDOWN @ ${f(S.m)}× — ${alive.length} vaporized, ${f(prize)} ◎ redistributed`)}
+  else if(kind==="bonanza"){chime();
+    say("bon",`BONANZA @ ${f(S.m)}× — ${f(bon)} ◎ split among ${alive.length} still in the core`)}
+  else say("info","cold shutdown — everyone got out, stakes returned, nothing won or lost");
+}
+
+/* ---------- the tick ---------- */
+function gameTick(){
+  S.tick++;S.lastTick=performance.now();
+  S.m*=(1+G0+GA*S.tick);S.pts.push({t:S.tick,m:S.m});
+  let ex=0;
+  S.players.forEach(p=>{
+    if(!p.alive)return;
+    const auto=p.autoM!=null&&S.m>=p.autoM;
+    if(p.q||p.pend||auto){p.alive=false;p.exitM=S.m;p.exitT=S.tick;ex++;
+      if(p.you){say("you",`YOU ejected @ ${f(S.m)}×`);blip()}
+      else say("exit",`${p.name} ejected @ ${f(S.m)}×`)}});
+  if(ex)S.recent.push({t:S.tick,n:ex});
+  S.recent=S.recent.filter(e=>S.tick-e.t<=2);
+  const alive=aliveOf();
+  if(!alive.length){resolve("cold");return}
+
+  const E=alive.reduce((a,p)=>a+p.stake*S.m,0);
+  S.load=S.pot>0?E/S.pot:1;
+  S.haz=clamp(H0*Math.pow(S.load,ALPHA)+S.tick*HT,.0005,.35);
+
+  const cn=S.recent.reduce((a,e)=>a+e.n,0);
+  const casc=cn>=3||cn/(alive.length+cn)>.3;
+  alive.forEach(p=>{
+    if(p.you||p.pend)return;
+    if(S.m>=p.target){p.pend=true;return}
+    if(S.haz>.012&&S.m>1.12&&Math.random()<p.nerve*(casc?.30:.10))p.pend=true});
+
+  if(sound&&AC){const n=S.haz*45;let c=Math.floor(n)+(Math.random()<n%1?1:0);
+    for(let i=0;i<c;i++)setTimeout(geiger,Math.random()*TICK)}
+
+  if(Math.random()<S.haz){
+    const q=Math.min(.45,QBON*(1+S.jack/Math.max(S.pot,1e-9)));
+    resolve(Math.random()<q?"bonanza":"melt");
+  }
+}
+
+/* ---------- loop ---------- */
+setInterval(()=>{
+  const now=performance.now();
+  if(S.phase==="LOBBY"){
+    S.plan=S.plan.filter(b=>{
+      if(b.at<=now){S.players.push(b.p);S.pot+=b.p.stake;
+        say("bet",`${b.p.name} armed ${f(b.p.stake)} ◎`);return false}
+      return true});
+    if(now>=S.ends)startRun();
+  }else if(S.phase==="RUN")gameTick();
+  else if(now>=S.ends)lobby();
+  render();
+},TICK);
+
+/* ---------- canvas ---------- */
+const cv=$("cv"),wrap=$("scopewrap");
+(function draw(){
+  requestAnimationFrame(draw);
+  const dpr=devicePixelRatio||1,W=wrap.clientWidth,H=wrap.clientHeight;
+  if(cv.width!==W*dpr){cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+"px";cv.style.height=H+"px"}
+  const x=cv.getContext("2d");x.setTransform(dpr,0,0,dpr,0,0);x.clearRect(0,0,W,H);
+  const pl=44,pr=14,pt=18,pb=22,iw=W-pl-pr,ih=H-pt-pb;
+  let mL=S.m;
+  if(S.phase==="RUN"){const fr=clamp((performance.now()-S.lastTick)/TICK,0,1);
+    mL=S.m*Math.pow(1+G0+GA*(S.tick+1),fr)}
+  const mMax=Math.max(2,Math.max(mL,...S.pts.map(p=>p.m))*1.18), tMax=Math.max(26,S.tick+3);
+  const X=t=>pl+(t/tMax)*iw, Y=m=>pt+ih-(Math.log(m)/Math.log(mMax))*ih;
+  x.strokeStyle="#243036";x.lineWidth=1;x.fillStyle="#6b7480";x.font="10px 'IBM Plex Mono',monospace";
+  [1,1.2,1.5,2,3,4,5,7,10,15,20,30,50].forEach(g=>{if(g>mMax)return;const y=Y(g);
+    x.globalAlpha=g===1?.9:.45;x.beginPath();x.moveTo(pl,y);x.lineTo(W-pr,y);x.stroke();
+    x.globalAlpha=1;x.fillText(g+"×",8,y+3)});
+  for(let t=0;t<=tMax;t+=Math.ceil(tMax/8)){x.globalAlpha=.22;x.beginPath();
+    x.moveTo(X(t),pt);x.lineTo(X(t),H-pb);x.stroke();x.globalAlpha=1}
+  if(S.phase==="LOBBY"&&S.pts.length<=1)return;
+  const pts=[...S.pts];
+  if(S.phase==="RUN")pts.push({t:S.tick+clamp((performance.now()-S.lastTick)/TICK,0,1),m:mL});
+  const k=S.res&&S.res.kind;
+  const col=k==="melt"?"#ff4b3e":k==="bonanza"?"#ffd75e":"#ff9f1c";
+  const grd=x.createLinearGradient(0,pt,0,H-pb);
+  grd.addColorStop(0,k==="melt"?"rgba(255,75,62,.2)":k==="bonanza"?"rgba(255,215,94,.24)":"rgba(255,159,28,.18)");
+  grd.addColorStop(1,"rgba(0,0,0,0)");
+  x.beginPath();x.moveTo(X(pts[0].t),Y(pts[0].m));pts.forEach(p=>x.lineTo(X(p.t),Y(p.m)));
+  x.lineTo(X(pts[pts.length-1].t),H-pb);x.lineTo(X(pts[0].t),H-pb);x.closePath();x.fillStyle=grd;x.fill();
+  x.beginPath();x.moveTo(X(pts[0].t),Y(pts[0].m));pts.forEach(p=>x.lineTo(X(p.t),Y(p.m)));
+  x.strokeStyle=col;x.lineWidth=2.4;x.shadowColor=col;x.shadowBlur=14;x.stroke();x.shadowBlur=0;
+  S.players.forEach(p=>{if(p.exitM==null)return;
+    x.beginPath();x.arc(X(p.exitT),Y(p.exitM),p.you?4.5:3,0,7);
+    x.fillStyle=p.you?"#79d2e6":"#6fcf8f";x.shadowColor=x.fillStyle;x.shadowBlur=8;x.fill();x.shadowBlur=0});
+  if(k==="melt"||k==="bonanza"){const L=pts[pts.length-1],px=X(L.t),py=Y(L.m);
+    x.strokeStyle=col;x.lineWidth=1.5;x.setLineDash([4,4]);x.beginPath();
+    x.moveTo(px,pt);x.lineTo(px,H-pb);x.stroke();x.setLineDash([]);
+    x.beginPath();x.arc(px,py,8,0,7);x.fillStyle=col;x.shadowColor=col;x.shadowBlur=22;x.fill();x.shadowBlur=0}
+})();
+
+/* ---------- render ---------- */
+const LAMPS=[
+ ["BETS OPEN",()=>S.phase==="LOBBY","var(--green)"],
+ ["REACTION",()=>S.phase==="RUN","var(--amber)"],
+ ["CROWDED CORE",()=>S.phase==="RUN"&&S.load>1,"var(--amber)"],
+ ["HIGH HAZARD",()=>S.phase==="RUN"&&S.haz>.015,"var(--red)"],
+ ["CASCADE",()=>S.phase==="RUN"&&S.recent.reduce((a,e)=>a+e.n,0)>=3,"var(--red)"],
+ ["BONANZA ARMED",()=>S.jack>0,"var(--gold)"],
+ ["COLD SHUTDOWN",()=>S.res&&S.res.kind==="cold","var(--cyan)"],
+ ["MELTDOWN",()=>S.res&&S.res.kind==="melt","var(--red)"]];
+$("lamps").innerHTML=LAMPS.map((l,i)=>`<div class="lamp" id="lamp${i}">${l[0]}</div>`).join("");
+
+function render(){
+  const now=performance.now(), left=Math.max(0,Math.ceil((S.ends-now)/1000));
+  const you=S.players.find(p=>p.you), alive=aliveOf();
+  $("hdr").textContent=`ROUND ${S.round} · tape ${S.seed}… · tick ${TICK}ms · max bet 15% of pot · rake ${RAKE*100}% of busted stakes only`;
+  $("bal").textContent=f(bal)+" ◎";
+  $("pnl").innerHTML=`<span style="color:${pnl>=0?"var(--green)":"var(--red)"}">${pnl>=0?"+":""}${f(pnl)} ◎ session</span>`;
+  LAMPS.forEach((l,i)=>{const e=$("lamp"+i),on=l[1]();e.className="lamp"+(on?" on":"");
+    e.style.color=on?l[2]:"#39424a";e.style.borderColor=on?l[2]:"var(--edge)";
+    e.style.background=on?"color-mix(in srgb,"+l[2]+" 13%,transparent)":"var(--panel2)"});
+
+  $("jackv").textContent=f(S.jack)+" ◎";
+  $("jackodds").textContent=S.phase==="RUN"
+    ? `${f(Math.min(45,QBON*100*(1+S.jack/Math.max(S.pot,1e-9))),0)}% of core events pay this out`
+    : "builds when a round leaves no survivors";
+
+  // ---- YOUR POSITION: the live money readout ----
+  let pos="";
+  if(!you) pos=`<span style="color:var(--dim)">Not in this round. Arm a stake when bets open.</span>`;
+  else if(S.phase==="LOBBY")
+    pos=`Staked <b>${f(you.stake)} ◎</b>${you.autoM?` · auto-eject set at ${f(you.autoM)}×`:""}<br>
+      <span style="color:var(--dim)">Waiting for the reaction to start.</span>`;
+  else if(you.alive){
+    const b=previewBonanza(you);
+    pos=`<span style="color:var(--amber)">STILL IN — ${f(you.stake)} ◎ at risk</span><br>
+      If it melts now: <b style="color:var(--red)">−${f(you.stake)} ◎</b> (you lose everything)<br>
+      If BONANZA fires now: <b style="color:var(--gold)">+${f(b-you.stake)} ◎</b><br>
+      <span style="color:var(--dim)">Eject and you keep your ${f(you.stake)} ◎ but give up the Bonanza claim.</span>`;
+  }else if(you.exitM!=null){
+    const p=previewMelt(you);
+    pos=`<span style="color:var(--cyan)">OUT @ ${f(you.exitM)}× — principal ${f(you.stake)} ◎ is safe</span><br>
+      If it melts now you take home <b style="color:var(--green)">${f(p)} ◎</b>
+      (<b style="color:${p>you.stake?"var(--green)":"var(--dim)"}">${p>=you.stake?"+":""}${f(p-you.stake)} ◎</b>)<br>
+      <span style="color:var(--dim)">Grows as more people bust. Zero if everyone escapes.</span>`;
+  }else pos=`<span style="color:var(--red)">VAPORIZED — stake lost</span>`;
+  $("pos").innerHTML=pos;
+
+  $("loadv").textContent=f(S.load);
+  $("loadv").style.color=S.load<.9?"var(--green)":S.load<1.4?"var(--amber)":"var(--red)";
+  $("hazv").textContent=f(S.haz*100)+"%";
+  $("hazv").style.color=S.haz>.015?"var(--red)":"var(--amber)";
+  $("loadbar").style.width=(clamp(S.load/2.5,0,1)*100)+"%";
+  $("loadnote").textContent=`${f(alive.reduce((a,p)=>a+p.stake,0))} ◎ still in × ${f(S.m)}× ÷ ${f(S.pot)} ◎ pot. Every eject cools the core.`;
+
+  // readout
+  let ro="";
+  if(S.phase==="LOBBY")ro=`<div style="font-size:13px;color:var(--dim);letter-spacing:.2em">BETS OPEN</div>
+    <div style="font-size:44px;font-weight:700;color:var(--green)">${left}s</div>
+    <div style="font-size:12px;color:var(--dim)">pot ${f(S.pot)} ◎ · ${S.players.length} in</div>`;
+  else if(S.phase==="RUN"){const hot=S.haz>.02;
+    ro=`<div class="${hot?"pulse":""}" style="font-size:52px;font-weight:700;
+      color:${hot?"var(--red)":"var(--hot)"};text-shadow:0 0 24px ${hot?"#ff4b3e66":"#ff9f1c66"}">${f(S.m)}×</div>
+      <div style="font-size:12px;color:var(--dim)">${alive.length} still in · ${S.players.length-alive.length} escaped</div>`}
+  else if(S.res){const c=S.res.kind==="melt"?"var(--red)":S.res.kind==="bonanza"?"var(--gold)":"var(--cyan)";
+    ro=`<div style="font-size:13px;letter-spacing:.2em;color:${c}">${
+      S.res.kind==="melt"?(S.res.orphan?"MELTDOWN — NO SURVIVORS":"MELTDOWN"):
+      S.res.kind==="bonanza"?"★ BONANZA ★":"COLD SHUTDOWN"}</div>
+      <div style="font-size:46px;font-weight:700;color:${c}">${f(S.res.m)}×</div>`}
+  $("readout").innerHTML=ro;
+
+  // settlement card
+  const st=$("settle");
+  if(S.phase==="RESULT"&&S.res){
+    st.style.display="block";
+    const r=S.res;
+    let hdr = r.kind==="melt" ? (r.orphan
+        ? `<span>Nobody cashed out, so nobody could be paid — the full <b style="color:var(--gold)">${f(r.dead-r.rake)} ◎</b> rolls into the Bonanza.</span>`
+        : `<span>busted stakes <b style="color:var(--red)">${f(r.dead)} ◎</b></span>
+           <span>paid to survivors <b style="color:var(--green)">${f(r.prize)} ◎</b></span>
+           <span>rake <b style="color:var(--amber)">${f(r.rake)} ◎</b></span>`)
+      : r.kind==="bonanza"
+        ? `<span>Bonanza paid <b style="color:var(--gold)">${f(r.bon)} ◎</b> to everyone still in the core. Nobody lost a stake.</span>`
+        : `<span>Everyone escaped, so no money changed hands. Stakes returned in full.</span>`;
+    const rows=[...S.players].sort((a,b)=>a.you?-1:b.you?1:(b.pay-b.stake)-(a.pay-a.stake)).map(p=>{
+      const d=p.pay-p.stake;
+      const status=p.exitM!=null?`out @ ${f(p.exitM)}×`:(p.pay>0?`held to ${f(r.m)}×`:"☠ vaporized");
+      return `<div class="trow" style="color:${p.you?"var(--cyan)":"var(--text)"}">
+        <span class="nm">${p.name}</span><span style="width:66px;color:var(--dim)">${f(p.stake)} ◎</span>
+        <span style="width:96px;color:${p.pay>0?"var(--green)":"var(--red)"}">${status}</span>
+        <span style="margin-left:auto;color:${d>1e-4?"var(--green)":d<-1e-4?"var(--red)":"var(--dim)"}">
+          ${d>=0?"+":""}${f(d)} ◎</span></div>`}).join("");
+    st.innerHTML=`<div class="row" style="gap:16px;margin-bottom:6px;color:var(--dim)">${hdr}
+      ${r.net!=null?`<span style="margin-left:auto">YOUR NET <b style="color:${
+        r.net>0?"var(--green)":r.net<0?"var(--red)":"var(--cyan)"}">${r.net>=0?"+":""}${f(r.net)} ◎</b></span>`:""}
+      <span>next round ${left}s</span></div>${rows}`;
+  } else st.style.display="none";
+
+  // controls
+  const ctrl=$("ctrl");
+  if(S.phase==="LOBBY"&&!you){
+    if(!ctrl.dataset.mode||ctrl.dataset.mode!=="bet"){ctrl.dataset.mode="bet";
+      ctrl.innerHTML=`<div class="row" style="gap:12px;align-items:flex-end">
+        <div><div class="lbl">STAKE ◎</div><input id="bet" value="0.50" inputmode="decimal"></div>
+        <div class="row" style="gap:4px">${[.1,.5,1,2].map(v=>`<button class="q" data-v="${v}" style="padding:8px 10px;font-size:11px">${v}</button>`).join("")}</div>
+        <div><div class="lbl">AUTO-EJECT AT (optional)</div><input id="auto" placeholder="e.g. 2.50" inputmode="decimal"></div>
+        <button id="arm" style="background:var(--hot);color:#151009;border-color:var(--hot);font-weight:600;padding:12px 24px">ARM STAKE</button>
+        <span style="font-size:11px;color:var(--dim)">min 0.05 ◎ · anything over 15% of the pot is refunded at lock</span></div>`;
+      document.querySelectorAll(".q").forEach(b=>b.onclick=()=>$("bet").value=b.dataset.v);
+      $("arm").onclick=arm}
+  }else if(S.phase==="RUN"&&you&&you.alive){
+    ctrl.dataset.mode="ej";
+    ctrl.innerHTML=`<button id="ej" style="font-size:20px;font-weight:600;padding:16px 42px;
+      background:${you.q?"var(--panel2)":"var(--green)"};color:${you.q?"var(--cyan)":"#0d1512"};
+      border-color:${you.q?"var(--cyan)":"var(--green)"};box-shadow:${you.q?"none":"0 0 22px #6fcf8f55"}"
+      ${you.q?"disabled":""}>${you.q?"EJECT QUEUED — CLEARS NEXT TICK":"EJECT"}</button>
+      <span style="font-size:11px;color:var(--dim);margin-left:12px">all exits in the same tick get the same multiplier — speed is worth nothing here</span>`;
+    if(!you.q)$("ej").onclick=eject;
+  }else{ctrl.dataset.mode="msg";
+    ctrl.innerHTML=`<span style="font-size:13px;color:var(--dim)">${
+      S.phase==="RESULT"?"Round settled. Bets reopen shortly.":
+      you?"Position closed — watch the settlement.":"Spectating. Bets open shortly."}</span>`}
+
+  // table
+  $("tablehdr").textContent=`THE TABLE · pot ${f(S.pot)} ◎ · ${S.players.length} players`;
+  $("table").innerHTML=[...S.players].sort((a,b)=>a.you?-1:b.you?1:(a.alive===b.alive?b.stake-a.stake:a.alive?-1:1))
+    .map(p=>{const s=p.exitM!=null?["out @ "+f(p.exitM)+"×",p.you?"var(--cyan)":"var(--green)"]
+      :p.q?["eject queued","var(--cyan)"]:p.pay===0&&!p.alive?["vaporized","var(--red)"]:["in the core","var(--amber)"];
+      return `<div class="trow" style="color:${p.you?"var(--cyan)":"var(--text)"}">
+        <span class="nm">${p.name}${S.pot>0&&p.stake>.13*S.pot?" 🐋":""}</span>
+        <span style="width:62px;text-align:right;color:var(--dim)">${f(p.stake)} ◎</span>
+        <span style="width:104px;text-align:right;color:${s[1]}">${s[0]}</span></div>`}).join("")
+    ||`<span style="font-size:12px;color:var(--dim)">empty core</span>`;
+
+  const FC={bet:"var(--dim)",exit:"var(--green)",you:"var(--cyan)",warn:"var(--amber)",
+    melt:"var(--red)",bon:"var(--gold)",info:"var(--dim)"};
+  $("feed").innerHTML=S.feed.map(x=>`<div style="color:${FC[x.k]}">${x.msg}</div>`).join("");
+  $("hist").innerHTML=S.hist.map(h=>`<span class="pill" style="color:${
+    h.kind==="bonanza"?"var(--gold)":h.kind==="cold"?"var(--cyan)":h.m<1.5?"var(--red)":h.m<3?"var(--amber)":"var(--green)"}">${
+    h.kind==="bonanza"?"★ "+f(h.m)+"×":h.kind==="cold"?"safe":f(h.m)+"×"}</span>`).join("")
+    ||`<span class="pill" style="color:var(--dim)">—</span>`;
+}
+
+/* ---------- actions ---------- */
+function arm(){
+  ac();
+  const v=parseFloat($("bet").value), a=parseFloat($("auto").value);
+  if(isNaN(v)||v<.05||v>bal)return;
+  bal=+(bal-v).toFixed(4);
+  S.players.push({id:"you",name:"YOU",stake:+v.toFixed(2),you:true,alive:true,pend:false,q:false,
+    exitM:null,exitT:null,pay:0,autoM:(!isNaN(a)&&a>1.01)?a:null});
+  S.pot+=+v.toFixed(2);
+  say("you",`YOU armed ${f(v)} ◎`);blip();$("ctrl").dataset.mode="";render();
+}
+function eject(){const you=S.players.find(p=>p.you);
+  if(S.phase!=="RUN"||!you||!you.alive||you.q)return;
+  you.q=true;say("you","EJECT queued — clears next tick");blip();render()}
+$("snd").onclick=()=>{ac();sound=!sound;$("snd").textContent=sound?"SOUND ON":"SOUND OFF"};
+
+$("foot").innerHTML=`<b>How the money works.</b> Cash out and your stake is always returned — the house never touches it.
+Players who don't get out lose their stake; that pile is split among everyone who did get out, weighted by how deep they went,
+so a later exit earns a bigger slice than an early one. Rake is ${RAKE*100}% and comes only from that pile.
+<b>The Bonanza</b> is separate money, built up from past rounds where nobody escaped at all. When it fires it pays only the
+players still in the core, split by stake — so leaving early forfeits it, and every player who bails makes your share bigger.
+No single wallet may exceed 15% of the pot; the excess is refunded automatically before the round starts.
+All exits clear at tick boundaries and everyone in the same tick gets the same multiplier, so a faster connection is worth nothing.`;
+
+planBots();render();
+</script>
+</body>
+</html>
