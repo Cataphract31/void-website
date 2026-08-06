@@ -190,7 +190,7 @@ td:last-child{text-align:right;font-variant-numeric:tabular-nums}
   <h3>Heat</h3>
   <p>A packed reactor is hungry &mdash; around <b>7% a tick</b>. As people die and walk out it cools to <b>0.4%</b>. Staying gets safer the longer you last, but there is nobody left to pay you. <b>Safe and poor, or crowded and rich.</b></p>
   <h3>Tickets and the Bonanza</h3>
-  <p>Every tick inside earns Bonanza tickets, and they build <b>faster while the reactor is hot</b>. Tickets lock in when you walk out, so leaving never costs you them. The jackpot fires roughly <b>1 round in 1500</b> however large it has grown, and one ticket holder takes all of it.</p>
+  <p>Every tick inside earns Bonanza tickets, and they build <b>faster while the reactor is hot</b>. Tickets lock in when you walk out, so leaving never costs you them, and they <b>carry over between rounds</b> — your balance keeps building. The jackpot fires roughly <b>1 round in 1500</b> however large it has grown. One ticket holder takes all of it and <b>every ticket is then void</b>, like a lottery draw. The next raffle starts from zero for everybody.</p>
   <h3>The numbers</h3>
   <p>The door takes <b>7%</b>: 4% house, 3% Bonanza. The Bonanza is paid back to players, so the long-run return is <b>96%</b>. Everything you can win is money other players brought &mdash; no bankroll, nothing to drain, no round the house can lose.</p>
   <p style="color:var(--dim);font-size:11px;margin-top:12px">Demo build &mdash; play money.</p>
@@ -215,7 +215,8 @@ const ENTRY=0.10, HOUSE_CUT=0.04, BON_CUT=0.03;   // -> 96% RTP
 const TICK=560, LOBBY=8000, RESULT=5600;
 const Q0=0.075, ALPHA=2.4, CREEP=0.0005, QMIN=0.004, QMAX=0.42;
 const BON_P=1/1500;
-const T_BASE=300, T_RISK=200;      // jackpot tickets: flat base + a topping bought with danger                                // FIXED fire chance per round — the pool is free to balloon
+let myTix=0, allTix=0, cycle=1;   // raffle balances — wiped when it fires
+const T_BASE=150, T_RISK=260;      // jackpot tickets: flat base + a topping bought with danger                                // FIXED fire chance per round — the pool is free to balloon
 const NBOTS=34;
 
 const NAMES=["latency_god","glass_hands","kerem.sol","panic_wojak","curve_priest","dead_inside",
@@ -285,14 +286,14 @@ function begin(){
 function endRound(kind){
   S.phase="RESULT";S.ends=Date.now()+RESULT;S.res=kind;
   roundsSince++;
-  if(S.players.length&&Math.random()<BON_P){
-    const TT=S.players.reduce((a,p)=>a+(p.tk||T_BASE),0);
-    let r=Math.random()*TT, w=S.players[0];
-    for(const p of S.players){r-=(p.tk||T_BASE);if(r<=0){w=p;break}}
-    w.bonWin=bonanza;bonBest=Math.max(bonBest,bonanza);
-    H.bonOut+=bonanza;H.fires++;
-    say("b",`\u2605 BONANZA \u2605 ${f(bonanza,2)} \u25ce won by ${w.name} \u2014 ${(bonanza/ENTRY).toFixed(0)}\u00d7 their entry`);
-    bonanza=0;roundsSince=0;sBon();
+  S.players.forEach(p=>{const t=p.tk||T_BASE;allTix+=t;if(p.you)myTix+=t});
+  if(S.players.length&&Math.random()<BON_P&&allTix>0){
+    const iWon = Math.random() < myTix/allTix;
+    bonBest=Math.max(bonBest,bonanza);H.bonOut+=bonanza;H.fires++;
+    if(iWon){const y=S.players.find(p=>p.you)||{};y.bonWin=bonanza;
+      say("b",`\u2605 BONANZA \u2605 ${f(bonanza,2)} \u25ce \u2014 YOU WON IT`);}
+    else say("b",`\u2605 BONANZA \u2605 ${f(bonanza,2)} \u25ce won by another ticket holder \u2014 all tickets void`);
+    bonanza=0;roundsSince=0;myTix=0;allTix=0;cycle++;sBon();
   }
   const you=S.players.find(p=>p.you);
   if(you){
