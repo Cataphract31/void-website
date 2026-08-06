@@ -112,7 +112,7 @@ td:last-child{text-align:right;font-variant-numeric:tabular-nums}
   <div style="flex-basis:100%;height:4px;background:#241d0a;border-radius:2px;overflow:hidden;margin-top:6px">
     <div id="bonbar" style="height:100%;width:0;background:var(--gold);transition:width .5s"></div>
   </div>
-  <div style="flex-basis:100%;font-size:9.5px;color:var(--dim)">Fires about 1 round in 1500 — it never gets easier, it just gets bigger. Every entry is one ticket.</div>
+  <div style="flex-basis:100%;font-size:9.5px;color:var(--dim)">Fires about 1 round in 1500 — it never gets easier, it just gets bigger. Every entry earns tickets, and they build faster the hotter the reactor is.</div>
 </div>
 
 <div id="main">
@@ -200,7 +200,8 @@ td:last-child{text-align:right;font-variant-numeric:tabular-nums}
 const ENTRY=0.10, HOUSE_CUT=0.04, BON_CUT=0.03;   // -> 96% RTP
 const TICK=560, LOBBY=8000, RESULT=5600;
 const Q0=0.075, ALPHA=2.4, CREEP=0.0005, QMIN=0.004, QMAX=0.42;
-const BON_P=1/1500;                                // FIXED fire chance per round — the pool is free to balloon
+const BON_P=1/1500;
+const T_BASE=300, T_RISK=200;      // jackpot tickets: flat base + a topping bought with danger                                // FIXED fire chance per round — the pool is free to balloon
 const NBOTS=34;
 
 const NAMES=["latency_god","glass_hands","kerem.sol","panic_wojak","curve_priest","dead_inside",
@@ -271,7 +272,9 @@ function endRound(kind){
   S.phase="RESULT";S.ends=Date.now()+RESULT;S.res=kind;
   roundsSince++;
   if(S.players.length&&Math.random()<BON_P){
-    const w=S.players[Math.random()*S.players.length|0];
+    const TT=S.players.reduce((a,p)=>a+(p.tk||T_BASE),0);
+    let r=Math.random()*TT, w=S.players[0];
+    for(const p of S.players){r-=(p.tk||T_BASE);if(r<=0){w=p;break}}
     w.bonWin=bonanza;bonBest=Math.max(bonBest,bonanza);
     H.bonOut+=bonanza;H.fires++;
     say("b",`\u2605 BONANZA \u2605 ${f(bonanza,2)} \u25ce won by ${w.name} \u2014 ${(bonanza/ENTRY).toFixed(0)}\u00d7 their entry`);
@@ -301,6 +304,7 @@ function step(){
   S.q=Math.min(QMAX,Math.max(QMIN,Q0*Math.pow(heat,ALPHA)+CREEP*S.tick));
 
   /* eliminations */
+  live.forEach(p=>{p.tk=(p.tk||T_BASE)+T_RISK*S.q});
   const dead=[];
   live.forEach(p=>{if(Math.random()<S.q){p.alive=false;p.dead=true;dead.push(p)}});
   let pool=0;dead.forEach(p=>{pool+=p.bal;p.bal=0});
@@ -378,7 +382,8 @@ function render(force){
     $("holdsub").textContent=S.phase==="LOBBY"?"tap below to pay 0.1 ◎ and enter":"watching this round";}
   else if(you.alive){const g=you.bal/ENTRY;
     $("hold").textContent=f(you.bal)+" ◎";$("hold").style.color=g>=1?"var(--green)":"var(--amber)";
-    $("holdsub").textContent=`${g>=1?"+":""}${((g-1)*100).toFixed(1)}% on your entry · walk out to keep it`;}
+    $("holdsub").innerHTML=`${g>=1?"+":""}${((g-1)*100).toFixed(1)}% on your entry · `+
+      `<span style="color:var(--gold)">${Math.round(you.tk||T_BASE)} tickets</span>`;}
   else if(you.out!==null){$("hold").textContent=f(you.out)+" ◎";$("hold").style.color="var(--cyan)";
     $("holdsub").textContent="banked — you're out";}
   else if(you.dead){$("hold").textContent="0.000 ◎";$("hold").style.color="var(--red)";
