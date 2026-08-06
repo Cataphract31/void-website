@@ -86,6 +86,13 @@ h1 b{color:var(--hot);font-weight:600}
 table{width:100%;border-collapse:collapse;font-size:11.5px}
 td{padding:3px 0;border-top:1px solid #252d3555}
 td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+#ov{position:fixed;inset:0;background:#080b0fee;backdrop-filter:blur(7px);z-index:60;
+  display:none;overflow-y:auto;padding:16px}
+#ov.on{display:block}
+#ovin{max-width:620px;margin:0 auto}
+#ov h3{font-family:'Oswald',sans-serif;font-size:12.5px;margin:16px 0 4px;color:var(--amber);letter-spacing:.14em}
+#ov p{font-size:13px;line-height:1.75;color:#bcc5cf;margin:0 0 6px}
+#ov b{color:var(--text)}
 @media(min-width:860px){
   #main{display:grid;grid-template-columns:1fr 330px;gap:10px;align-items:start}
   #hero{grid-template-columns:repeat(4,1fr)}
@@ -102,6 +109,7 @@ td:last-child{text-align:right;font-variant-numeric:tabular-nums}
     <span class="lbl">WALLET</span> <b id="wal" style="color:var(--amber)"></b>
     <span id="ses" style="font-size:12px"></span>
     <button id="snd" style="padding:4px 8px;font-size:10px">SOUND</button>
+    <button id="help" style="padding:4px 9px;font-size:11px">?</button>
   </span>
 </div>
 
@@ -112,7 +120,7 @@ td:last-child{text-align:right;font-variant-numeric:tabular-nums}
   <div style="flex-basis:100%;height:4px;background:#241d0a;border-radius:2px;overflow:hidden;margin-top:6px">
     <div id="bonbar" style="height:100%;width:0;background:var(--gold);transition:width .5s"></div>
   </div>
-  <div style="flex-basis:100%;font-size:9.5px;color:var(--dim)">Fires about 1 round in 1500 — it never gets easier, it just gets bigger. Every entry earns tickets, and they build faster the hotter the reactor is.</div>
+
 </div>
 
 <div id="main">
@@ -147,9 +155,7 @@ td:last-child{text-align:right;font-variant-numeric:tabular-nums}
       <span class="lbl" id="heatnote"></span>
     </div>
     <div id="heatwrap"><div id="heatbar"></div></div>
-    <div style="font-size:10px;color:var(--dim);margin-top:5px">
-      Heat falls as the reactor empties. A quiet reactor is safer — but there are fewer people left to pay you.
-    </div>
+
   </div>
 
   <div class="panel" id="gridwrap">
@@ -171,21 +177,24 @@ td:last-child{text-align:right;font-variant-numeric:tabular-nums}
     <table id="house"></table>
   </div>
 
-  <div class="panel" style="padding:10px;margin-top:8px">
-    <div class="lbl" style="margin-bottom:5px">How it works</div>
-    <div style="font-size:11px;color:var(--dim);line-height:1.7">
-      There is no multiplier. Every tick the reactor takes some of the people inside,
-      and <b style="color:var(--text)">their SOL is split instantly between everyone still standing</b>.
-      That is the only way anyone earns. Walk out whenever you like and keep what you're holding.
-      If you're the last one inside, the reactor is yours.
-      <br><br>
-      Entry is fixed at 0.1 SOL so nobody can be a bigger slice of the pot than anyone else.
-      The door takes 4% for the house and 3% for the Bonanza, which is paid back to players —
-      <b style="color:var(--text)">96% RTP</b>.
-    </div>
   </div>
 </div>
-</div>
+
+<div id="ov"><div id="ovin">
+  <div style="display:flex;align-items:center;margin-bottom:8px">
+    <h2 style="font-family:Oswald,sans-serif;font-size:21px;margin:0;letter-spacing:.06em">HOW IT WORKS</h2>
+    <button style="margin-left:auto" id="close">CLOSE</button></div>
+  <p>There is no multiplier. <b>You earn only when other people get taken.</b></p>
+  <h3>The round</h3>
+  <p>Everyone pays the same <b>0.1 &#9678;</b> to step inside. Every tick the reactor takes some of the people in there, and <b>their SOL is split instantly between everyone still standing</b>. Walk out whenever you like and keep exactly what you are holding. Last one inside takes the whole reactor.</p>
+  <h3>Heat</h3>
+  <p>A packed reactor is hungry &mdash; around <b>7% a tick</b>. As people die and walk out it cools to <b>0.4%</b>. Staying gets safer the longer you last, but there is nobody left to pay you. <b>Safe and poor, or crowded and rich.</b></p>
+  <h3>Tickets and the Bonanza</h3>
+  <p>Every tick inside earns Bonanza tickets, and they build <b>faster while the reactor is hot</b>. Tickets lock in when you walk out, so leaving never costs you them. The jackpot fires roughly <b>1 round in 1500</b> however large it has grown, and one ticket holder takes all of it.</p>
+  <h3>The numbers</h3>
+  <p>The door takes <b>7%</b>: 4% house, 3% Bonanza. The Bonanza is paid back to players, so the long-run return is <b>96%</b>. Everything you can win is money other players brought &mdash; no bankroll, nothing to drain, no round the house can lose.</p>
+  <p style="color:var(--dim);font-size:11px;margin-top:12px">Demo build &mdash; play money.</p>
+</div></div>
 
 <div id="bar"><div class="inner">
   <button id="act" class="wait">—</button>
@@ -355,6 +364,9 @@ function act(){
   render(true);
 }
 $("act").onclick=act;
+$("help").onclick=()=>$("ov").classList.add("on");
+$("close").onclick=()=>$("ov").classList.remove("on");
+$("ov").onclick=e=>{if(e.target.id=="ov")$("ov").classList.remove("on")};
 $("snd").onclick=()=>{ac();sound=!sound;$("snd").textContent=sound?"SOUND ON":"SOUND"};
 
 /* ---------- loop ---------- */
