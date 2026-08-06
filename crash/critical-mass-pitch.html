@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CRITICAL MASS — Game Sheet</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=Archivo:wght@600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#080a0d;--card:#12161c;--edge:#212932;--gold:#ffd75e;--amber:#ffb347;
+--green:#4fd48a;--cyan:#5fcbe8;--red:#ff4d42;--text:#eae5da;--dim:#697380}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospace;
+ font-size:13px;padding:22px 16px 60px;background-image:radial-gradient(800px 380px at 50% -10%,#151f28,transparent 70%)}
+.w{max-width:880px;margin:0 auto}
+h1{font-family:'Archivo',sans-serif;font-weight:800;font-size:32px;margin:0;letter-spacing:-.01em}
+h1 i{font-style:normal;color:#ff8c1a}
+h2{font-family:'Archivo',sans-serif;font-size:12px;letter-spacing:.2em;text-transform:uppercase;
+ color:var(--amber);margin:26px 0 9px;font-weight:600}
+.tag{color:var(--dim);font-size:13px;margin:5px 0 0}
+.hero{background:var(--card);border:1px solid var(--edge);border-radius:12px;padding:18px 20px;margin-top:16px}
+.hero p{margin:0;font-size:15px;line-height:1.7}
+.g{display:grid;gap:9px}
+.g4{grid-template-columns:repeat(2,1fr)}
+@media(min-width:720px){.g4{grid-template-columns:repeat(4,1fr)}}
+.k{background:var(--card);border:1px solid var(--edge);border-radius:10px;padding:12px 13px}
+.k .l{font-size:9px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase}
+.k .v{font-family:'Archivo',sans-serif;font-weight:800;font-size:24px;margin-top:4px;line-height:1}
+.k .s{font-size:10.5px;color:var(--dim);margin-top:4px}
+table{width:100%;border-collapse:collapse;font-size:12.5px;background:var(--card);
+ border:1px solid var(--edge);border-radius:10px;overflow:hidden}
+th{text-align:left;font-size:9.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--dim);
+ padding:9px 11px;border-bottom:1px solid var(--edge);font-weight:600}
+td{padding:8px 11px;border-bottom:1px solid #1a2028}
+tr:last-child td{border-bottom:none}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+ul{margin:0;padding-left:17px}li{margin:5px 0;line-height:1.65}
+.note{color:var(--dim);font-size:11.5px;line-height:1.7;margin-top:9px}
+.pill{display:inline-block;font-size:10px;padding:3px 8px;border-radius:20px;
+ border:1px solid var(--edge);color:var(--dim);margin-right:5px}
+</style></head><body><div class="w">
+
+<h1>CRITICAL<i>MASS</i></h1>
+<p class="tag">Player-vs-player elimination · real-time multiplayer · Solana</p>
+<div style="margin-top:9px">
+<span class="pill">96% RTP</span><span class="pill">34s rounds</span>
+<span class="pill">No bankroll</span><span class="pill">Progressive jackpot</span><span class="pill">Mobile-first</span>
+</div>
+
+<div class="hero"><p>
+Everyone pays the same entry and steps into the reactor. Every tick it takes some of the people inside,
+and <b>their stake is split instantly between everyone still standing</b>. Walk out whenever you like and
+keep what you're holding. Last one inside takes the reactor.
+</p></div>
+
+<h2>Core numbers</h2>
+<div class="g g4">
+  <div class="k"><div class="l">RTP</div><div class="v" style="color:var(--green)">96.0%</div>
+    <div class="s">93% in-round + 3% jackpot</div></div>
+  <div class="k"><div class="l">House edge</div><div class="v">4.00%</div>
+    <div class="s">of handle, zero variance</div></div>
+  <div class="k"><div class="l">Max win</div><div class="v" style="color:var(--gold)">8,539×</div>
+    <div class="s">observed jackpot, uncapped</div></div>
+  <div class="k"><div class="l">Round</div><div class="v">34s</div>
+    <div class="s">20–40 players</div></div>
+</div>
+
+<h2>Player profiles</h2>
+<table>
+<tr><th>Style</th><th class="n">RTP</th><th class="n">Hit freq</th><th class="n">Volatility</th><th class="n">Top 1%</th><th class="n">Max</th></tr>
+<tr><td>Cautious — exits ~1.2×</td><td class="n">95.19%</td><td class="n">79.4%</td><td class="n">0.47</td><td class="n">1.31×</td><td class="n">1.6×</td></tr>
+<tr><td>Standard — exits ~1.6×</td><td class="n">95.77%</td><td class="n">59.0%</td><td class="n">0.78</td><td class="n">1.78×</td><td class="n">2.6×</td></tr>
+<tr><td>Aggressive — exits ~3×</td><td class="n">97.04%</td><td class="n">27.9%</td><td class="n">1.53</td><td class="n">4.92×</td><td class="n">10.5×</td></tr>
+<tr><td>Last-man hunter — never exits</td><td class="n">96.97%</td><td class="n">16.4%</td><td class="n">2.26</td><td class="n">9.28×</td><td class="n">15.9×</td></tr>
+</table>
+<p class="note">80,000 simulated rounds per profile. <b>The player picks their own volatility</b> — from a 79% hit-rate grind
+to a 16% lottery — across a 1.9-point RTP band. No strategy dominates; the spread is deliberate and small enough
+to be undetectable without tens of thousands of rounds.</p>
+
+<h2>Progressive jackpot — "Bonanza"</h2>
+<div class="g g4">
+  <div class="k"><div class="l">Frequency</div><div class="v">1 in 1,550</div><div class="s">rounds, fixed</div></div>
+  <div class="k"><div class="l">Median award</div><div class="v" style="color:var(--gold)">898×</div><div class="s">an entry</div></div>
+  <div class="k"><div class="l">Top decile</div><div class="v" style="color:var(--gold)">2,974×</div><div class="s">max seen 8,539×</div></div>
+  <div class="k"><div class="l">Funding</div><div class="v">3%</div><div class="s">of entries, self-balancing</div></div>
+</div>
+<p class="note">Raffle model. Every tick inside earns tickets, faster while the reactor is hot, and they carry
+between rounds. One holder takes the whole pool and <b>all tickets void</b> — the next raffle starts from zero
+for everyone. Median gap between hits is 1,069 rounds; the longest observed drought ran 10,166.</p>
+
+<table style="margin-top:9px">
+<tr><th>Segment</th><th class="n">Jackpot recovery</th></tr>
+<tr><td>Regular (every round)</td><td class="n">3.27%</td></tr>
+<tr><td>Casual (15% of rounds)</td><td class="n">2.80%</td></tr>
+<tr><td>Tourist (2% of rounds)</td><td class="n">3.17%</td></tr>
+<tr><td>Risk-taker</td><td class="n" style="color:var(--green)">3.75%</td></tr>
+<tr><td>Instant-exit farmer</td><td class="n" style="color:var(--red)">1.68%</td></tr>
+</table>
+<p class="note">Return rate is independent of how often you play, so casuals never subsidise regulars.
+Risk-takers earn above their contribution; ticket farming is self-punishing without any anti-abuse rule.</p>
+
+<h2>Operator economics</h2>
+<table>
+<tr><th>Scenario</th><th class="n">Handle / day</th><th class="n">Revenue / day</th></tr>
+<tr><td>28 players · 240 rounds</td><td class="n">672 ◎</td><td class="n">26.9 ◎</td></tr>
+<tr><td>28 players · 600 rounds</td><td class="n">1,680 ◎</td><td class="n">67.2 ◎</td></tr>
+<tr><td>80 players · 600 rounds</td><td class="n">4,800 ◎</td><td class="n">192.0 ◎</td></tr>
+</table>
+<p class="note">Revenue is 4% of handle every round with <b>no variance and no bankroll</b> — payouts are carved
+from stakes already in the contract, so no round, streak, or whale can produce a loss. Revenue scales with
+concurrency and round frequency rather than bet size.</p>
+
+<h2>Why it holds up</h2>
+<ul>
+<li><b>Provably solvent.</b> Every payout is money already destroyed that tick. Nothing to back, nothing to drain.</li>
+<li><b>No dominant strategy.</b> Expected value per tick is exactly 1 regardless of danger level — a mathematical property, not a tuning result.</li>
+<li><b>Manipulation-proof.</b> Cooling the reactor doesn't improve your odds, so multi-wallet attacks earn nothing.</li>
+<li><b>Fixed entry.</b> Nobody can be a larger share of the pot than anyone else, which removes the size penalty inherent to pot-based games.</li>
+<li><b>Batched exits.</b> Everyone in a tick clears together, so latency and bots hold no edge over humans.</li>
+<li><b>Live spectacle.</b> Every tick, real players visibly die and their SOL flies into the survivors — the mechanic explains itself with no tutorial.</li>
+</ul>
+
+<h2>Deployment notes</h2>
+<ul>
+<li>Session-key vault: one signature per session, non-custodial, no wallet popup per action.</li>
+<li>One settlement transaction per round; exits are signed intents batched at tick boundaries.</li>
+<li>Randomness from a hash tape committed before each round — verifiable after, unknowable during.</li>
+<li>Jackpot state is one balance and one cycle number per wallet; winner is deterministic from public data.</li>
+<li>Larger lobbies raise the ceiling — max win scales linearly with headcount (28 → 26×, 80 → 74×, 150 → 139×). Size lobbies for round pacing (32s at 28 players, 43s at 150), not for payout reasons.</li>
+<li>Jackpot requires pre-funding at launch; it needs volume to become worth chasing.</li>
+</ul>
+
+<p class="note" style="margin-top:26px">All figures from Monte Carlo simulation of the shipped parameters.
+Base-game ceiling scales linearly with lobby size (28 players → 26×; 80 → 74×; 150 → 139×) because the last player standing takes the whole room. Jackpot is uncapped.</p>
+
+</div></body></html>
