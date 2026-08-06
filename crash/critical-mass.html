@@ -112,7 +112,7 @@ td:last-child{text-align:right;font-variant-numeric:tabular-nums}
   <div style="flex-basis:100%;height:4px;background:#241d0a;border-radius:2px;overflow:hidden;margin-top:6px">
     <div id="bonbar" style="height:100%;width:0;background:var(--gold);transition:width .5s"></div>
   </div>
-  <div style="flex-basis:100%;font-size:9.5px;color:var(--dim)">The bigger it grows, the more often it fires.</div>
+  <div style="flex-basis:100%;font-size:9.5px;color:var(--dim)">Fires about 1 round in 1500 — it never gets easier, it just gets bigger. Every entry is one ticket.</div>
 </div>
 
 <div id="main">
@@ -200,7 +200,7 @@ td:last-child{text-align:right;font-variant-numeric:tabular-nums}
 const ENTRY=0.10, HOUSE_CUT=0.04, BON_CUT=0.03;   // -> 96% RTP
 const TICK=560, LOBBY=8000, RESULT=5600;
 const Q0=0.075, ALPHA=2.4, CREEP=0.0005, QMIN=0.004, QMAX=0.42;
-const BON_K=7.5e-5;                                // fire chance per round = BON_K * pool
+const BON_P=1/1500;                                // FIXED fire chance per round — the pool is free to balloon
 const NBOTS=34;
 
 const NAMES=["latency_god","glass_hands","kerem.sol","panic_wojak","curve_priest","dead_inside",
@@ -216,7 +216,7 @@ const pick=a=>a[Math.random()*a.length|0];
 
 let wallet=5.0, session=0, sound=false;
 const H={rounds:0,handle:0,rake:0,bonIn:0,bonOut:0,fires:0};
-let bonanza=18.0, bonOdds=0, bonPressure=0;                                   // seeded so the demo has something to chase
+let bonanza=42.0, roundsSince=0, bonBest=0;                                   // seeded so the demo has something to chase
 
 const S={phase:"LOBBY",ends:0,round:1041,players:[],pot:0,tick:0,q:Q0,log:[],joined:false,res:null};
 
@@ -252,9 +252,6 @@ function lobby(){
     S.players.push({id:i,name:pool[i],you:false,alive:false,bal:0,out:null,dead:false,target,
                     nerve:Math.pow(Math.random(),1.3)});
   }
-  const pr=BON_K*bonanza;
-  bonOdds = pr>0 ? Math.max(1,Math.round(1/pr/25)*25) : 0;
-  bonPressure = Math.min(1, bonanza/60);
   say("i",`round ${S.round} — entries open, 0.1 ◎ each`);
   render(true);
 }
@@ -272,9 +269,18 @@ function begin(){
 }
 function endRound(kind){
   S.phase="RESULT";S.ends=Date.now()+RESULT;S.res=kind;
+  roundsSince++;
+  if(S.players.length&&Math.random()<BON_P){
+    const w=S.players[Math.random()*S.players.length|0];
+    w.bonWin=bonanza;bonBest=Math.max(bonBest,bonanza);
+    H.bonOut+=bonanza;H.fires++;
+    say("b",`\u2605 BONANZA \u2605 ${f(bonanza,2)} \u25ce won by ${w.name} \u2014 ${(bonanza/ENTRY).toFixed(0)}\u00d7 their entry`);
+    bonanza=0;roundsSince=0;sBon();
+  }
   const you=S.players.find(p=>p.you);
   if(you){
-    const got=you.out!==null?you.out:0;
+    const got=(you.out!==null?you.out:0)+(you.bonWin||0);
+    if(you.bonWin)say("y",`YOU WON THE BONANZA \u2014 +${f(you.bonWin,2)} \u25ce`);
     wallet+=got;session+=got-ENTRY;
   }
   if(kind==="wipe")say("d","total wipeout — the reactor kept everything, it goes to the Bonanza");
@@ -311,19 +317,6 @@ function step(){
       bonanza+=pool;H.bonIn+=pool;endRound("wipe");return;
     }
   }else if(sound&&AC){sTick()}
-
-  /* bonanza roll */
-  const pRound=BON_K*bonanza, pTick=pRound/60;
-  if(surv.length&&Math.random()<pTick){
-    const W=surv.reduce((a,p)=>a+p.bal,0);
-    const paid=bonanza;
-    surv.forEach(p=>{const s=paid*p.bal/W;p.bal+=s;p.bonWin=s});
-    H.bonOut+=paid;H.fires++;bonanza=0;
-    const you=surv.find(p=>p.you);
-    say("b",`★ BONANZA ★ ${f(paid,2)} ◎ dumped into the reactor — split by ${surv.length} still inside`);
-    if(you)say("y",`your share: +${f(you.bonWin,3)} ◎`);
-    sBon();
-  }
 
   /* bot decisions */
   S.players.forEach(p=>{
@@ -375,10 +368,10 @@ function render(force){
   $("wal").textContent=f(wallet,3)+" ◎";
   $("ses").innerHTML=`<span style="color:${session>=0?'var(--green)':'var(--red)'}">${session>=0?"+":""}${f(session,3)} ◎</span>`;
   $("bonv").textContent=f(bonanza,2)+" ◎";
-  $("bonodds").textContent=bonanza>0
-    ? `about 1 in ${bonOdds} rounds · ${(bonanza/ENTRY).toFixed(0)}× an entry · pays everyone still inside`
-    : "just fired — rebuilding";
-  $("bonbar").style.width=(bonPressure*100)+"%";
+  $("bonodds").innerHTML=`<b style="color:var(--gold)">${(bonanza/ENTRY).toFixed(0)}×</b> an entry · one winner takes all · `+
+    `<b style="color:var(--text)">${roundsSince}</b> rounds since the last hit`+
+    (bonBest?` · biggest so far ${f(bonBest,1)} ◎`:"");
+  $("bonbar").style.width=Math.min(100,roundsSince/15)+"%";
 
   /* holdings */
   if(!you){$("hold").textContent="—";$("hold").style.color="var(--dim)";
