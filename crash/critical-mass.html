@@ -213,7 +213,7 @@ td:last-child{text-align:right;font-variant-numeric:tabular-nums}
    ================================================= */
 const ENTRY=0.10, HOUSE_CUT=0.04, BON_CUT=0.03;   // -> 96% RTP
 const TICK=560, LOBBY=8000, RESULT=5600;
-const Q0=0.075, ALPHA=2.4, CREEP=0.0005, QMIN=0.004, QMAX=0.42;
+const Q0=0.075, ALPHA=2.4, CREEP=0.0007, CREEP_BLEND=0.44, QMIN=0.004, QMAX=0.42;
 const BON_P=1/1500;
 let myTix=0, allTix=0, cycle=1;   // raffle balances — wiped when it fires
 const T_BASE=150, T_RISK=260;      // jackpot tickets: flat base + a topping bought with danger                                // FIXED fire chance per round — the pool is free to balloon
@@ -316,7 +316,7 @@ function step(){
     endRound("done");return;
   }
   const heat=live.length/S.players.length;
-  S.q=Math.min(QMAX,Math.max(QMIN,Q0*Math.pow(heat,ALPHA)+CREEP*S.tick));
+  S.q=Math.min(QMAX,Math.max(QMIN,Q0*Math.pow(heat,ALPHA)+CREEP*S.tick*(CREEP_BLEND+(1-CREEP_BLEND)*heat)));
 
   /* eliminations */
   live.forEach(p=>{p.tk=(p.tk||T_BASE)+T_RISK*S.q});
