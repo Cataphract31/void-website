@@ -635,9 +635,18 @@ export function sfxSeal(): void {
   texture({ dur: 0.19, gain: 0.07, freq: 520, sweepTo: 170, q: 1.1, wet: 0.35 });
 }
 
-/** You bonded in. A single quiet, low confirmation. */
+/**
+ * You bonded in. A single low confirmation.
+ *
+ * The sample rides considerably louder than the synthesised version it
+ * replaces. That voice was written as the quietest thing in the game — a
+ * deliberate near-nothing — and the pack file inherited its level, which left
+ * a real recording sitting under everything around it. Loudness normalisation
+ * does not catch this: it equalises the *files*, and this was the cue's own
+ * trim being wrong.
+ */
 export function sfxJoin(): void {
-  if (sample("join", 0.8, 0.25)) return;
+  if (sample("join", 1.9, 0.3)) return;
   knock(210, 0.09, 0.28);
   sub({ freq: 140, dur: 0.22, gain: 0.07, attack: 0.014, wet: 0.3 });
 }
