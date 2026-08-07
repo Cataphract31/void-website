@@ -10,7 +10,7 @@ import { DevPanel } from "@/ui/DevPanel";
 import { ActionBar, AutoPanel, BonanzaBar, TopBar } from "@/ui/Hud";
 import { InfoOverlay } from "@/ui/Info";
 import { Tutorial, tutorialSeen } from "@/ui/Tutorial";
-import { CharSelect, WinnerOverlay } from "@/ui/Chars";
+import { CharSelect, ShatterCard, WinnerOverlay } from "@/ui/Chars";
 import { initAudio } from "@/audio/sound";
 import { initCharAssets } from "@/game/chars";
 import { initTileAssets } from "@/render/tiles";
@@ -121,6 +121,7 @@ export default function App(): JSX.Element {
               </div>
             )}
 
+            <ShatterCard snap={snap} />
             <WinnerOverlay snap={snap} />
             <BonanzaOverlay event={snap.bonanza} />
             {import.meta.env.DEV && <DevPanel client={client} snap={snap} />}

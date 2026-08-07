@@ -608,14 +608,19 @@ export class LatticeRenderer {
    * The character on a plate: real art once it loads, emoji until then.
    * Pixel art is blitted with smoothing off so it stays crunchy at any size.
    */
-  private drawHead(c: Cell, alpha: number, jx: number, jy: number): void {
+  private drawHead(c: Cell, alpha: number, jx: number, jy: number, grow: number): void {
     const { ctx } = this;
     const r = this.radius;
     const img = charImage(c.charId, "head");
     ctx.save();
     ctx.globalAlpha = alpha * 0.96;
     if (img) {
-      const s = r * 1.15;
+      // Sized as someone STANDING on the plate, not as a portrait pasted over
+      // it. At full-plate size the heads buried the ice art and a crowded
+      // field read as noise; small enough to leave the ice visible, they go
+      // back to doing their actual job, which is making the field feel
+      // populated so an elimination reads as a person and not a cell.
+      const s = r * grow;
       // Characters sit on pale ice now, so they need to be lifted off it —
       // a soft contact shadow does that without touching the art itself.
       ctx.shadowColor = "rgba(4, 14, 24, 0.5)";
@@ -625,7 +630,7 @@ export class LatticeRenderer {
       ctx.drawImage(img, c.x + jx - s / 2, c.y + jy - s / 2, s, s);
       ctx.imageSmoothingEnabled = true;
     } else {
-      ctx.font = `${Math.round(r * 0.9)}px sans-serif`;
+      ctx.font = `${Math.round(r * grow * 0.85)}px sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(charById(c.charId).emoji, c.x + jx, c.y + jy + r * 0.04);
@@ -760,6 +765,17 @@ export class LatticeRenderer {
     const midY = b.y + b.h / 2;
     const span = Math.max(b.w, b.h) * 0.6 || 1;
 
+    // A crowd is texture; the last few are individuals. Characters stay small
+    // while the field is packed, so the ice reads as one surface instead of a
+    // wall of faces, and grow as the field empties and each survivor starts
+    // to matter. Same art, opposite feeling, no toggle to get wrong.
+    let standing = 0;
+    for (const c of this.cells.values()) {
+      if (c.state === "live" || c.state === "you") standing++;
+    }
+    const crowd = Math.max(0, Math.min(1, (standing - 4) / 10));
+    const headGrow = 0.82 - 0.24 * crowd;
+
     for (const c of this.cells.values()) {
       c.t += dt;
       if (c.born < 1) c.born = Math.min(1, c.born + dt * 4);
@@ -837,8 +853,8 @@ export class LatticeRenderer {
       // standing: a shattered plate has nobody left to draw, and a cashed
       // ghost cell is the record of a departure. Skipped when plates get too
       // fine to read a face on.
-      if (inPlay && this.radius >= 11) {
-        this.drawHead(c, alpha, jx, jy + dy);
+      if (inPlay && this.radius >= 16) {
+        this.drawHead(c, alpha, jx, jy + dy, headGrow);
       }
 
       // Grace freeze-over: frost sweeps outward from the centre of the lattice

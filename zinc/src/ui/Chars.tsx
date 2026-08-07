@@ -132,6 +132,27 @@ export function CharSelect({
 }
 
 /**
+ * Your defeat, the instant it happens.
+ *
+ * The loss poses exist for exactly one moment and it is this one, so it fires
+ * on the tick your plate goes rather than waiting for the end card, and then
+ * stays put while you spectate: it doubles as the reminder that you are out
+ * and watching. One card for you alone, never a row of everyone's casualties.
+ */
+export function ShatterCard({ snap }: { snap: Snapshot }): JSX.Element | null {
+  if (!snap.you.joined || snap.you.outcome !== "dead" || snap.bonanza) return null;
+  return (
+    <div
+      key={snap.roundId}
+      className="win-rise pointer-events-none absolute bottom-2 left-2 z-20 flex items-end gap-1.5"
+    >
+      <CharArt charId={snap.charId} pose="lose" size={64} dim />
+      <span className="label pb-1 text-[var(--color-danger)]">you shattered</span>
+    </div>
+  );
+}
+
+/**
  * The round-end scene: an arcade winner screen over the lattice. The last one
  * standing gets top billing in their victory pose; the fallen line up small in
  * defeat along the bottom. A total wipe gets its own card, because "the ice

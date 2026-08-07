@@ -301,8 +301,12 @@ export class GameClient {
   private roundImmortal = false;
   private winner: WinnerInfo | null = null;
   private teamWins: Record<string, number> = {};
-  /** Your character. Bots get theirs per lobby in `charMap`. */
-  charId: string = CHARACTERS[0]!.id;
+  /**
+   * Your character. Drawn at random on a first visit rather than defaulting
+   * everyone to the same face, then remembered; bots get theirs per lobby in
+   * `charMap`.
+   */
+  charId: string = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)]!.id;
   private charMap = new Map<number, string>();
   auto: AutoSettings = { enabled: false, target: 2 };
   dev: DevSettings = {
