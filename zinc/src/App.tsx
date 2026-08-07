@@ -63,7 +63,9 @@ export default function App(): JSX.Element {
             <AliveCard snap={snap} />
           </div>
 
-          <div className="relative min-h-0 flex-1 overflow-hidden rounded-sm border border-[var(--color-edge)]">
+          {/* Flat: the lattice reads as a surface, not a framed screenshot.
+              Its darker pit background is the only separation it needs. */}
+          <div className="relative min-h-0 flex-1 overflow-hidden rounded-sm">
             <Shaft snap={snap} onSelectCell={setSelected} />
 
             {chosen && (
@@ -171,7 +173,37 @@ export default function App(): JSX.Element {
           onWalkOut={() => client.walkOut()}
         />
       </div>
+
+      <Footer onShowInfo={() => setShowInfo(true)} />
     </div>
+  );
+}
+
+/**
+ * Slim anchor for the bottom of the page. Without it the layout just stops,
+ * which reads as "did this fail to load" or "can I scroll"; with it the page
+ * visibly ends on purpose.
+ */
+function Footer({ onShowInfo }: { onShowInfo: () => void }): JSX.Element {
+  return (
+    <footer className="flex shrink-0 items-center justify-between px-3 py-2">
+      <span className="label">
+        THIN<span className="text-[var(--color-cyan)]">ICE</span> · a zinc game
+      </span>
+      <span className="label flex items-center gap-3">
+        <button onClick={onShowInfo} className="label hover:text-[var(--color-text)]">
+          provably fair
+        </button>
+        <a
+          href="https://zinc.cash"
+          target="_blank"
+          rel="noreferrer"
+          className="hover:text-[var(--color-text)]"
+        >
+          zinc.cash
+        </a>
+      </span>
+    </footer>
   );
 }
 

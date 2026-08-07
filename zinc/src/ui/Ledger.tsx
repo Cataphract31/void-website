@@ -51,7 +51,7 @@ export function Roster({
             <div
               key={p.id}
               onClick={() => onSelect?.(p.id)}
-              className="absolute left-0 flex w-full cursor-pointer items-center gap-2 border-b border-[var(--color-edge)]/40 px-1 text-[11.5px] hover:bg-[var(--color-panel2)]"
+              className="absolute left-0 flex w-full cursor-pointer items-center gap-2 px-1 text-[11.5px] hover:bg-[var(--color-panel2)]"
               style={{ height: item.size, transform: `translateY(${item.start}px)` }}
             >
               {snap.dev.memeMode ? (

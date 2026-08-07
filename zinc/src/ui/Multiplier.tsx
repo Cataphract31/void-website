@@ -96,7 +96,7 @@ export function Multiplier({ snap }: { snap: Snapshot }): JSX.Element {
 
       {/* Once you are out, your number freezes while the room's keeps moving. */}
       {locked !== null && (
-        <div className="mt-2 flex items-center gap-2 rounded-sm border border-[var(--color-cyan)]/40 bg-[var(--color-cyan)]/8 px-3 py-1">
+        <div className="mt-2 flex items-center gap-2 rounded-sm bg-[var(--color-cyan)]/12 px-3 py-1">
           <span className="label text-[var(--color-cyan)]">you banked</span>
           <span className="tnum text-[15px] font-semibold text-[var(--color-cyan)]">
             {locked.toFixed(2)}×

@@ -42,12 +42,13 @@
 
   /*
    * Mono for every numeral — tabular figures do not reflow while animating,
-   * and monospaced digits are what financial products are read in. Inter for
-   * everything else: a condensed display face read as sporty and generic,
-   * where this needs to read as trustworthy.
+   * and monospaced digits are what financial products are read in. Chakra
+   * Petch for everything else: squared, instrument-panel letterforms that
+   * read as game hardware instead of a SaaS landing page (the CEO's verdict
+   * on Inter: generic).
    */
   --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
-  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Chakra Petch", ui-sans-serif, system-ui, sans-serif;
 }
 
 :root {

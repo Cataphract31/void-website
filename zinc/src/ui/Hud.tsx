@@ -1,5 +1,6 @@
-import { useState, type JSX } from "react";
+import { useEffect, useState, type JSX } from "react";
 import type { AutoSettings, Snapshot } from "@/game/client";
+import { shortAddress } from "@/game/names";
 import {
   getVolume,
   initAudio,
@@ -95,6 +96,68 @@ function VolumePopover(): JSX.Element {
   );
 }
 
+/** The slice of Phantom's injected API this button needs. */
+type PhantomProvider = {
+  isPhantom?: boolean;
+  connect(opts?: { onlyIfTrusted?: boolean }): Promise<{ publicKey: { toString(): string } }>;
+  disconnect(): Promise<void>;
+};
+
+function phantom(): PhantomProvider | null {
+  const w = window as unknown as {
+    phantom?: { solana?: PhantomProvider };
+    solana?: PhantomProvider;
+  };
+  const p = w.phantom?.solana ?? w.solana;
+  return p?.isPhantom ? p : null;
+}
+
+/**
+ * Real Phantom connect, no wallet library: the extension injects its API into
+ * the page. For now the connection only proves the flow and shows the address;
+ * balances stay in the demo wallet until the server and program land.
+ */
+function WalletButton(): JSX.Element {
+  const [addr, setAddr] = useState<string | null>(null);
+
+  // Reconnect silently if the player has approved this site before.
+  useEffect(() => {
+    phantom()
+      ?.connect({ onlyIfTrusted: true })
+      .then((r) => setAddr(r.publicKey.toString()))
+      .catch(() => {});
+  }, []);
+
+  const click = async (): Promise<void> => {
+    const p = phantom();
+    if (!p) {
+      window.open("https://phantom.app", "_blank", "noopener");
+      return;
+    }
+    if (addr) {
+      await p.disconnect().catch(() => {});
+      setAddr(null);
+      return;
+    }
+    try {
+      const r = await p.connect();
+      setAddr(r.publicKey.toString());
+    } catch {
+      // Player closed the Phantom prompt; nothing to do.
+    }
+  };
+
+  return (
+    <button
+      onClick={click}
+      className="label rounded-sm bg-[var(--color-panel2)] px-2.5 py-1.5 hover:text-[var(--color-text)]"
+      style={addr ? { color: "var(--color-cyan)" } : undefined}
+    >
+      {addr ? shortAddress(addr) : "connect"}
+    </button>
+  );
+}
+
 function Stat({
   label,
   value,
@@ -166,7 +229,8 @@ export function TopBar({
           <Stats snap={snap} />
         </div>
 
-        <div className="flex items-center gap-0.5 sm:ml-1 max-sm:ml-auto">
+        <div className="flex items-center gap-1 sm:ml-1 max-sm:ml-auto">
+          <WalletButton />
           <IconButton label="How it works" onClick={onShowInfo}>
             ⓘ
           </IconButton>
@@ -225,7 +289,7 @@ export function AutoPanel({
 
 export function BonanzaBar({ snap }: { snap: Snapshot }): JSX.Element {
   return (
-    <div className="breathe mx-3 flex items-center gap-3 rounded-sm border border-[var(--color-gold)]/45 bg-gradient-to-r from-[#1b1608] to-[#0f1319] px-3 py-1.5">
+    <div className="breathe mx-3 flex items-center gap-3 rounded-sm bg-gradient-to-r from-[#1b1608] to-[#0f1319] px-3 py-1.5">
       <span className="label text-[var(--color-gold)]">bonanza</span>
       <span className="tnum text-[17px] font-bold text-[var(--color-gold)]">
         {snap.bonanzaPool.toFixed(1)} ◎
