@@ -89,13 +89,22 @@ export interface GameConfig {
 }
 
 /**
- * Proposed model: 7% total rake, of which only 2% is genuine house edge.
- * Headline RTP is 98% — 93% returned inside the game, 3% via the bonanza,
- * 2% via the revenue-share stream.
+ * 6% total rake in three equal thirds, of which only 2% is genuine house edge.
+ * Headline RTP is 98% — 94% returned inside the game, 2% via the bonanza, 2%
+ * via the revenue-share stream.
+ *
+ * This was 3% to the bonanza. Moving that point back into the game leaves the
+ * headline RTP and the house edge untouched at 98% / 2%, because the jackpot
+ * is player money either way. What it changes is who receives it: a jackpot
+ * point is paid out roughly once per 39,000 entries, so it is a point that
+ * almost nobody ever sees, while an in-game point is paid on every round.
+ * Measured, the swap raises the chance of finishing a round ahead and lifts
+ * the p90 outcome, and — because a jackpot contributes p·X² to variance and X
+ * is enormous — it cuts total variance per stake by 52%.
  */
 export const DEFAULT_CONFIG: GameConfig = {
   entry: 0.1,
-  rake: { bonanza: 0.03, house: 0.02, revShare: 0.02 },
+  rake: { bonanza: 0.02, house: 0.02, revShare: 0.02 },
   hazard: {
     q0: 0.075,
     // Crowding stays steep: this is the "fewer people, more oxygen" signal the

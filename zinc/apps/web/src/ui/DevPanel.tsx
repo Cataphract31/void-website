@@ -1,5 +1,15 @@
 import { useState, type JSX } from "react";
 import type { GameClient, Snapshot } from "@/game/client";
+import {
+  hasSample,
+  sfxBonanza,
+  sfxExtract,
+  sfxJoin,
+  sfxSeal,
+  sfxShatter,
+  sfxTick,
+  sfxYouDied,
+} from "@/audio/sound";
 
 /**
  * Testing controls. Not part of the player-facing product — this exists so the
@@ -111,10 +121,70 @@ export function DevPanel({
 
       <button
         onClick={() => client.skipPhase()}
-        className="label w-full rounded-sm border border-[var(--color-edge2)] py-1.5 hover:text-[var(--color-text)]"
+        className="label mb-2.5 w-full rounded-sm border border-[var(--color-edge2)] py-1.5 hover:text-[var(--color-text)]"
       >
         skip to next phase
       </button>
+
+      <SoundTest />
+    </div>
+  );
+}
+
+/**
+ * Audition every cue on demand.
+ *
+ * Judging audio by playing rounds until the right thing happens is hopeless,
+ * and swapping in a sample pack needs a tight loop: drop the file in, click,
+ * hear it. A dot marks cues that are being served from `public/sfx/` rather
+ * than synthesised, so it is obvious whether a pack file was actually picked
+ * up or quietly 404'd.
+ */
+function SoundTest(): JSX.Element {
+  const cues: [string, string, () => void][] = [
+    // Weighted toward 0.5-3%, which is where the hazard actually spends the
+    // round. The two high steps only exist to check the opening spike.
+    ["grace", "tick", () => sfxTick(0.075, true)],
+    ["0.4%", "tick", () => sfxTick(0.004)],
+    ["0.8%", "tick", () => sfxTick(0.008)],
+    ["1.5%", "tick", () => sfxTick(0.015)],
+    ["2.2%", "tick", () => sfxTick(0.022)],
+    ["3%", "tick", () => sfxTick(0.03)],
+    ["5%", "tick", () => sfxTick(0.05)],
+    ["7.5%", "tick", () => sfxTick(0.075)],
+    ["1 plate", "shatter", () => sfxShatter(1)],
+    ["4 plates", "shatter_many", () => sfxShatter(4)],
+    ["15 plates", "shatter_many", () => sfxShatter(15)],
+    ["you died", "died", sfxYouDied],
+    ["extract", "extract", sfxExtract],
+    ["seal", "seal", sfxSeal],
+    ["join", "join", sfxJoin],
+    ["bonanza", "bonanza", sfxBonanza],
+  ];
+
+  return (
+    <div className="border-t border-[var(--color-edge)] pt-2">
+      <div className="label mb-1.5 text-[var(--color-text)]">sound test</div>
+      <div className="grid grid-cols-2 gap-1">
+        {cues.map(([label, file, play]) => (
+          <button
+            key={label}
+            onClick={play}
+            className="label flex items-center gap-1 rounded-sm border border-[var(--color-edge2)] px-1.5 py-1 hover:text-[var(--color-text)]"
+          >
+            {hasSample(file) && (
+              <span
+                className="inline-block h-1 w-1 shrink-0 rounded-full"
+                style={{ background: "var(--color-profit)" }}
+              />
+            )}
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="label mt-1.5 leading-snug text-[var(--color-dim)]">
+        dot = playing your file from public/sfx
+      </div>
     </div>
   );
 }

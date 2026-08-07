@@ -5,6 +5,7 @@ import {
   type Entrant,
   type GameConfig,
   type Player,
+  totalRake,
   type Strategy,
 } from "@zinc/engine";
 import { NAMES, shuffled } from "./names";
@@ -199,8 +200,10 @@ export class GameClient {
     const nerve = Math.pow(this.rng.next(), 1.3);
     const panicAt = 0.055 + this.rng.next() * 0.04;
     // Balances are quoted against the post-rake starting stake, so break-even
-    // on the entry actually paid sits just above 1.
-    const breakEven = 1 / (1 - 0.07);
+    // on the entry actually paid sits just above 1. Derived from the config,
+    // not hardcoded — this was pinned at 0.07 and would have silently gone
+    // stale the moment the rake moved.
+    const breakEven = 1 / (1 - totalRake(this.config));
 
     return (ctx) => {
       // Nobody bails while the air still holds — there is nothing to flee.
@@ -297,7 +300,7 @@ export class GameClient {
       this.say("death", `${deaths} shattered`, `${this.currentMultiplier().toFixed(2)}×`);
       sfxShatter(deaths);
     } else {
-      sfxTick(round.hazard);
+      sfxTick(round.hazard, round.currentTick <= this.config.hazard.graceTicks);
     }
     if (youDied) sfxYouDied();
 
@@ -310,13 +313,13 @@ export class GameClient {
 
   private currentMultiplier(): number {
     const round = this.round;
-    if (!round) return 1 - 0.07;
+    if (!round) return 1 - totalRake(this.config);
     const live = round.players.find((p) => p.outcome === "in");
     if (live) return live.balance / this.config.entry;
     // Round is over: report the highest multiple anyone reached.
     let best = 0;
     for (const p of round.players) best = Math.max(best, p.cashedOut / this.config.entry);
-    return best || 1 - 0.07;
+    return best || 1 - totalRake(this.config);
   }
 
   private finish(): void {
@@ -462,8 +465,8 @@ export class GameClient {
               name: this.names.get(e.id) ?? "player",
               you: false,
               outcome: "in" as const,
-              multiple: 1 - 0.07,
-              balance: cfg.entry * (1 - 0.07),
+              multiple: 1 - totalRake(cfg),
+              balance: cfg.entry * (1 - totalRake(cfg)),
             })),
             ...(this.joined
               ? [
@@ -472,8 +475,8 @@ export class GameClient {
                     name: "YOU",
                     you: true,
                     outcome: "in" as const,
-                    multiple: 1 - 0.07,
-                    balance: cfg.entry * (1 - 0.07),
+                    multiple: 1 - totalRake(cfg),
+                    balance: cfg.entry * (1 - totalRake(cfg)),
                   },
                 ]
               : []),

@@ -1,22 +1,57 @@
 import { useState, type JSX } from "react";
 import type { Snapshot } from "@/game/client";
-import { initAudio, isMuted, loadMutePreference, setMuted } from "@/audio/sound";
+import {
+  getVolume,
+  initAudio,
+  isMuted,
+  loadMutePreference,
+  setMuted,
+  setVolume,
+} from "@/audio/sound";
 
-function MuteButton(): JSX.Element {
+/**
+ * Volume, not a mute toggle.
+ *
+ * On/off is a blunt instrument: a player who finds the game slightly too loud
+ * has only the option of silence, so they take it and never turn it back on.
+ * The speaker icon still mutes on click — that has to stay one tap — but the
+ * slider is right there, and both persist.
+ */
+function VolumeControl(): JSX.Element {
   const [off, setOff] = useState(() => loadMutePreference());
+  const [level, setLevel] = useState(() => getVolume());
+
   return (
-    <button
-      onClick={() => {
-        initAudio();
-        const next = !isMuted();
-        setMuted(next);
-        setOff(next);
-      }}
-      aria-label={off ? "Unmute" : "Mute"}
-      className="rounded-sm border border-[var(--color-edge2)] px-2 py-1 text-[13px] leading-none text-[var(--color-dim)] hover:text-[var(--color-text)]"
-    >
-      {off ? "🔇" : "🔊"}
-    </button>
+    <div className="flex items-center gap-1.5">
+      <button
+        onClick={() => {
+          initAudio();
+          const next = !isMuted();
+          setMuted(next);
+          setOff(next);
+        }}
+        aria-label={off ? "Unmute" : "Mute"}
+        className="rounded-sm border border-[var(--color-edge2)] px-2 py-1 text-[13px] leading-none text-[var(--color-dim)] hover:text-[var(--color-text)]"
+      >
+        {off ? "\u{1F507}" : "\u{1F50A}"}
+      </button>
+      <input
+        type="range"
+        min={0}
+        max={1}
+        step={0.02}
+        value={off ? 0 : level}
+        aria-label="Volume"
+        onChange={(e) => {
+          initAudio();
+          const v = Number(e.target.value);
+          setVolume(v);
+          setLevel(v);
+          setOff(v === 0 || isMuted());
+        }}
+        className="hidden w-[62px] accent-[var(--color-cyan)] sm:block"
+      />
+    </div>
   );
 }
 
@@ -60,7 +95,7 @@ export function TopBar({ snap }: { snap: Snapshot }): JSX.Element {
             </span>
           </div>
         </div>
-        <MuteButton />
+        <VolumeControl />
       </div>
     </div>
   );

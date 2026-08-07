@@ -40,7 +40,20 @@ let reverbBus: GainNode | null = null;
 let muted = false;
 
 const STORAGE_KEY = "zinc.muted";
-const VOLUME = 0.8;
+const VOLUME_KEY = "zinc.volume";
+/** 0–1, persisted. Mute is just this held at zero without forgetting the setting. */
+let volume = 0.7;
+
+/**
+ * Peak every pack sample is normalised to.
+ *
+ * Generated and library SFX arrive mastered near full scale, which is roughly
+ * three times hotter than anything synthesised here — so dropping one in made
+ * it jump out of the mix. Rather than guess a trim per file, every sample is
+ * scanned on load and scaled to this peak, which is where the synth voices
+ * sit. Re-generating a file at a different level then changes nothing.
+ */
+const SAMPLE_PEAK = 0.34;
 
 /* ── Optional sample pack ───────────────────────────────────────────────── */
 
@@ -57,6 +70,23 @@ const SAMPLE_NAMES = [
 type SampleName = (typeof SAMPLE_NAMES)[number];
 
 const samples = new Map<SampleName, AudioBuffer>();
+/** Per-sample scaling that brings each file to SAMPLE_PEAK. */
+const sampleGain = new Map<SampleName, number>();
+
+/** Highest absolute sample value across every channel. */
+function peakOf(buf: AudioBuffer): number {
+  let peak = 0;
+  for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+    const data = buf.getChannelData(ch);
+    // Stepping is plenty for a peak estimate on a one-shot and keeps a 5s
+    // stereo file from blocking the main thread on load.
+    for (let i = 0; i < data.length; i += 4) {
+      const v = data[i]! < 0 ? -data[i]! : data[i]!;
+      if (v > peak) peak = v;
+    }
+  }
+  return peak;
+}
 
 /**
  * Tries each container for each name. A miss is completely normal — the file
@@ -75,7 +105,10 @@ async function loadSamplePack(ac: AudioContext): Promise<void> {
           // A static host that falls back to index.html will hand us HTML with
           // a 200, so decoding is the real test of whether a sample exists.
           if (bytes.byteLength < 512) continue;
-          samples.set(name, await ac.decodeAudioData(bytes));
+          const buf = await ac.decodeAudioData(bytes);
+          const peak = peakOf(buf);
+          samples.set(name, buf);
+          sampleGain.set(name, peak > 0.001 ? SAMPLE_PEAK / peak : 1);
           return;
         } catch {
           /* next extension */
@@ -83,6 +116,11 @@ async function loadSamplePack(ac: AudioContext): Promise<void> {
       }
     }),
   );
+}
+
+/** True once a pack file for this cue has loaded. Drives the dev panel's indicator. */
+export function hasSample(name: string): boolean {
+  return samples.has(name as SampleName);
 }
 
 /** Plays a pack sample if one was found. Returns false to fall through to synthesis. */
@@ -93,7 +131,7 @@ function sample(name: SampleName, gain = 1, wet = 0.25, rate = 1): boolean {
   src.buffer = buf;
   src.playbackRate.value = rate;
   const g = ctx.createGain();
-  g.gain.value = gain;
+  g.gain.value = gain * (sampleGain.get(name) ?? 1);
   src.connect(g);
   connectVoice(g, wet);
   src.start();
@@ -143,7 +181,7 @@ export function initAudio(): void {
     comp.release.value = 0.22;
 
     const out = ac.createGain();
-    out.gain.value = muted ? 0 : VOLUME;
+    out.gain.value = muted ? 0 : volume;
     out.connect(comp);
     comp.connect(ac.destination);
 
@@ -171,10 +209,19 @@ export function initAudio(): void {
 export function loadMutePreference(): boolean {
   try {
     muted = localStorage.getItem(STORAGE_KEY) === "1";
+    const v = Number(localStorage.getItem(VOLUME_KEY));
+    if (Number.isFinite(v) && v > 0 && v <= 1) volume = v;
   } catch {
     muted = false;
   }
   return muted;
+}
+
+/** Applies mute and level together — mute is level zero without losing the setting. */
+function applyLevel(): void {
+  if (master && ctx) {
+    master.gain.setTargetAtTime(muted ? 0 : volume, ctx.currentTime, 0.03);
+  }
 }
 
 export function setMuted(next: boolean): void {
@@ -184,11 +231,37 @@ export function setMuted(next: boolean): void {
   } catch {
     /* preference simply won't persist */
   }
-  if (master && ctx) master.gain.setTargetAtTime(next ? 0 : VOLUME, ctx.currentTime, 0.03);
+  applyLevel();
 }
 
 export function isMuted(): boolean {
   return muted;
+}
+
+export function getVolume(): number {
+  return volume;
+}
+
+/**
+ * Master level, 0-1. Touching the slider also unmutes: a player dragging the
+ * volume up while muted plainly wants to hear something.
+ */
+export function setVolume(next: number): void {
+  volume = Math.max(0, Math.min(1, next));
+  if (volume > 0 && muted) {
+    muted = false;
+    try {
+      localStorage.setItem(STORAGE_KEY, "0");
+    } catch {
+      /* ignore */
+    }
+  }
+  try {
+    localStorage.setItem(VOLUME_KEY, String(volume));
+  } catch {
+    /* ignore */
+  }
+  applyLevel();
 }
 
 /** Routes a voice to the dry output and, optionally, the reverb send. */
@@ -309,21 +382,163 @@ function knock(freq: number, gain: number, wet = 0.18, delay = 0): void {
 /* ── Cues ───────────────────────────────────────────────────────────────── */
 
 /**
- * The metronome. It fires every half second, so it has to be almost
- * subliminal — anything with an edge becomes torture inside a minute. Rising
- * risk firms it up rather than raising its pitch.
+ * The metronome — the only cue that carries continuous information.
+ *
+ * It fires twice a second for the whole round, so it is the one sound a player
+ * hears enough times to read *without looking*. That makes it far too valuable
+ * to be a constant click.
+ *
+ * ── Calibration ──────────────────────────────────────────────────────────
+ * The scale is set by where the hazard actually spends its time, not by its
+ * theoretical bounds. Play a round and it opens near 7%, collapses within a
+ * few ticks, then lives between roughly 0.5% and 3% for almost the entire
+ * round. So that band gets the bulk of the expressive range; anything above
+ * 5% is a brief opening spike and only needs to be unmistakable, not detailed.
+ *
+ * The mapping is logarithmic for the same reason hearing is: what registers is
+ * the ratio between two values, not their difference. 1% to 2% is a doubling
+ * of your chance of dying and sounds like a real change; 6% to 7% is a sixth
+ * more and barely should.
+ *
+ *     hazard   0.35%   0.5%    1%     2%     3%     5%    7.5%
+ *     scale     0.00   0.11   0.33   0.56   0.69   0.85   0.98
+ *
+ * ── What moves ───────────────────────────────────────────────────────────
+ * Seven things at once, because level alone reads as "same sound, louder"
+ * rather than as danger:
+ *
+ *   level      near-silent when safe, seven times louder at the top
+ *   pitch      the pulse rises more than an octave
+ *   timbre     a dull lowpassed pff becomes a focused resonant knock
+ *   brightness the filter opens almost six-fold
+ *   length     the decay stretches from a blip to a thud
+ *   weight     sub-bass fades in through the upper half
+ *   space      the reverb send opens, which is what reads as dread
+ *
+ * Past ~3% a soft sub-only ghost beat follows each tick, tightening as risk
+ * climbs. See the note on it below: at a 500ms tick a full doubled beat is
+ * roughly 240bpm and reads as an alarm rather than as tension.
+ *
+ * Grace is deliberately its own thing: an airy, pitchless breath with no
+ * impact at all, because nothing can hurt you yet and the audio should say so.
  */
-export function sfxTick(hazard: number): void {
-  const t = Math.min(1, hazard / 0.13);
-  if (sample("tick", 0.5 + t * 0.3, 0.12)) return;
-  texture({
-    dur: 0.032,
-    gain: 0.05 + t * 0.05,
-    freq: 380 + t * 190,
-    q: 1.8,
-    wet: 0.14,
-  });
-  sub({ freq: 96, dur: 0.07, gain: 0.05 + t * 0.03, attack: 0.002, wet: 0.1 });
+
+/** Bottom of the audible scale — the configured hazard floor. */
+const Q_FLOOR = 0.0035;
+/** Top of the scale. Above this everything is already at maximum. */
+const Q_CEIL = 0.08;
+
+export function sfxTick(hazard: number, grace = false): void {
+  if (grace) {
+    if (sample("tick", 0.4, 0.2, 0.85)) return;
+    texture({ dur: 0.12, gain: 0.024, freq: 640, q: 0.8, type: "lowpass", attack: 0.035, wet: 0.32 });
+    return;
+  }
+
+  const t = Math.max(
+    0,
+    Math.min(
+      1,
+      Math.log(Math.max(Q_FLOOR, hazard) / Q_FLOOR) / Math.log(Q_CEIL / Q_FLOOR),
+    ),
+  );
+
+  if (sample("tick", 0.22 + t * 0.95, 0.06 + t * 0.5, 0.86 + t * 0.3)) return;
+
+  // Shaped curves so the middle of the range keeps moving rather than
+  // saturating: brightness and length lead, weight lags.
+  const lead = Math.pow(t, 0.75);
+
+  const wet = 0.05 + lead * 0.4;
+  const dur = 0.045 + lead * 0.215;
+
+  const beat = (delay: number, level: number): void => {
+    // Body. Timbre class changes, not just the filter frequency — a dull
+    // lowpassed breath at the bottom, a focused resonant knock at the top.
+    // Switching type is far more noticeable than any amount of tweening.
+    texture({
+      dur,
+      gain: (0.016 + lead * 0.082) * level,
+      freq: 240 + lead * 1160,
+      q: t < 0.28 ? 0.8 : 1.3 + lead * 3.4,
+      type: t < 0.28 ? "lowpass" : "bandpass",
+      sweepTo: 170 + lead * 300,
+      attack: 0.004 - lead * 0.0025,
+      wet,
+      delay,
+    });
+    // Pitched pulse — over an octave of travel, which is most of the tension.
+    sub({
+      freq: 68 + lead * 82,
+      glideTo: 52 + lead * 30,
+      dur: dur * 1.5,
+      gain: (0.022 + lead * 0.062) * level,
+      attack: 0.002,
+      wet: wet * 0.7,
+      delay,
+    });
+    // Weight. Fades in through the upper half; this is what pulls the tick
+    // toward the character of the lattice sealing.
+    if (t > 0.34) {
+      const w = (t - 0.34) / 0.66;
+      sub({
+        freq: 60,
+        glideTo: 36,
+        dur: 0.15 + w * 0.28,
+        gain: 0.055 * w * level,
+        attack: 0.006,
+        wet: 0.2 + w * 0.2,
+        delay,
+      });
+    }
+    // Bite. A short transient on top once it is genuinely dangerous — an
+    // attack character that simply is not present lower down. Kept well below
+    // the presence peak around 3-4kHz, which is where the ear is most easily
+    // fatigued and where this turned shrill.
+    if (t > 0.62) {
+      const b = (t - 0.62) / 0.38;
+      texture({
+        dur: 0.016,
+        gain: 0.016 * b * level,
+        freq: 2400 + b * 1200,
+        q: 1.1,
+        attack: 0.001,
+        wet: 0.15,
+        delay,
+      });
+    }
+  };
+
+  beat(0, 1);
+
+  /*
+   * The heartbeat.
+   *
+   * This is the cue the whole tick is built around, but it needs restraint at
+   * this tempo. Ticks land every 500ms, so a full second beat means four
+   * impacts a second — around 240bpm, which stops reading as tension and
+   * starts reading as an alarm. The reference (a shooter's low-health
+   * heartbeat) works because it is slow and alone in the mix; here it is
+   * riding on top of an already-fast metronome.
+   *
+   * So the second beat is a ghost, not a repeat: sub only, no body, no bite,
+   * darker and much quieter than the first, sitting under it rather than
+   * beside it. You feel the doubling more than you hear it. It also holds off
+   * until ~3% now, so it marks a genuinely hot shaft instead of being the
+   * normal state of affairs.
+   */
+  if (t > 0.68) {
+    const h = (t - 0.68) / 0.32;
+    sub({
+      freq: 58,
+      glideTo: 38,
+      dur: 0.13 + h * 0.09,
+      gain: 0.028 + h * 0.022,
+      attack: 0.008,
+      wet: 0.22,
+      delay: 0.16 - h * 0.045,
+    });
+  }
 }
 
 /**
