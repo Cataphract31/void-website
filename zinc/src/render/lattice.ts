@@ -525,28 +525,25 @@ export class LatticeRenderer {
   /**
    * Hairline stress cracks — the frozen lake groaning before it gives.
    *
-   * Driven by the same smoothed heat as the seams, but gated: nothing shows
-   * until the hazard is genuinely high, which by construction means the
-   * opening spike right after the grace thaws and the creeping endgame. Which
-   * plates crack, and where, is fixed by each cell's seed, so cracks grow and
-   * recede in place rather than sparkling randomly.
+   * Uniform across the field: every live plate cracks at the same intensity,
+   * because every live plate faces the same hazard. Per-plate stagger read as
+   * differential risk — players took a clean neighbour to mean their own
+   * plate was the weak one and cashed out on a signal that did not exist. The
+   * seed only varies geometry (crack angles and jags), never how cracked a
+   * plate is.
    */
   private drawStress(c: Cell, k: number, jx: number, jy: number): void {
     const { ctx } = this;
     const r = this.radius;
     const R = LatticeRenderer.rnd;
-    // More plates join in as stress climbs; which ones is stable per cell —
-    // ice does not crack uniformly, so plates joining a beat apart is the
-    // intended organic feel. Overdriven (x1.8) so the stagger lives below
-    // ~4.5% hazard: past that every plate shows fractures, which matters most
-    // in a thin endgame where two clean plates would read as a rendering bug.
-    if (R(c.seed * 9.17) > Math.min(1, k * 1.8)) return;
 
     ctx.save();
     ctx.strokeStyle = "#eaf6ff";
     ctx.lineWidth = Math.max(0.6, r * 0.06);
     ctx.lineCap = "round";
-    ctx.globalAlpha = 0.24 + 0.55 * k;
+    // Short opacity ramp at the bottom of the band: the whole field's
+    // hairlines emerge together, faint first, instead of popping in at once.
+    ctx.globalAlpha = Math.min(1, k * 6) * (0.24 + 0.55 * k);
     const grow = 0.5 + 0.5 * k;
     // More fractures join as the plate gets deeper into trouble.
     const arms = 2 + (k > 0.4 ? 1 : 0) + (k > 0.75 ? 1 : 0);
