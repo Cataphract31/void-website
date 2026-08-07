@@ -58,7 +58,7 @@ export function CharArt({
 export function CharHead({
   charId,
   outcome,
-  size = 16,
+  size = 18,
 }: {
   charId: string;
   outcome: "in" | "cashed" | "dead";

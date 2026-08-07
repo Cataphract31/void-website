@@ -59,6 +59,7 @@ export function Shaft({
       grace: snap.grace,
       phase: snap.phase,
       bonanzaAt: snap.bonanza?.at ?? null,
+      youOutcome: snap.you.joined ? snap.you.outcome : "out",
     });
   }, [snap]);
 

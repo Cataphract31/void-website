@@ -31,6 +31,8 @@ export interface LatticeSnapshot {
   phase: "lobby" | "live" | "result";
   /** Timestamp the jackpot fired, or null. Drives the gold flood. */
   bonanzaAt: number | null;
+  /** Your own standing. Drives the personal hit when your round ends. */
+  youOutcome: "out" | "in" | "cashed" | "dead";
 }
 
 interface Cell {
@@ -111,7 +113,13 @@ export class LatticeRenderer {
     grace: false,
     phase: "lobby",
     bonanzaAt: null,
+    youOutcome: "out",
   };
+  /** Your last known standing, so the moment it changes can be staged. */
+  private youWas: LatticeSnapshot["youOutcome"] = "out";
+  /** 1 to 0 over the beat after your own round ends. */
+  private hit = 0;
+  private hitKind: "dead" | "cashed" = "dead";
   private goldWave = 0;
   private layoutKey = "";
   private radius = 20;
@@ -207,6 +215,18 @@ export class LatticeRenderer {
     if (key !== this.layoutKey) {
       this.layout(snap.cells);
       this.layoutKey = key;
+    }
+
+    // Your round ending is the one event worth taking over the screen. It
+    // fires for you alone, so it stays a single beat whether the lobby holds
+    // ten players or a thousand, and it needs no announcements of other
+    // people's wallets to land.
+    if (snap.youOutcome !== this.youWas) {
+      if (this.youWas === "in" && (snap.youOutcome === "dead" || snap.youOutcome === "cashed")) {
+        this.hit = 1;
+        this.hitKind = snap.youOutcome;
+      }
+      this.youWas = snap.youOutcome;
     }
 
     let deaths = 0;
@@ -415,6 +435,7 @@ export class LatticeRenderer {
     this.frost += (frostTarget - this.frost) * Math.min(1, dt * (frostTarget > this.frost ? 3.2 : 1.6));
     this.shake *= Math.pow(0.002, dt);
     if (this.goldWave > 0) this.goldWave = Math.max(0, this.goldWave - dt / 6);
+    if (this.hit > 0) this.hit = Math.max(0, this.hit - dt / 1.1);
 
     const ctx = this.ctx;
     ctx.save();
@@ -429,9 +450,42 @@ export class LatticeRenderer {
     this.drawShards(dt);
     if (this.goldWave > 0) this.drawGoldFlood();
     this.drawAtmosphere();
+    if (this.hit > 0) this.drawHit();
     this.drawGrain();
 
     ctx.restore();
+  }
+
+  /**
+   * Your own ending, felt rather than announced: the room floods from the
+   * edges, crimson when the ice takes you and mint when you get out. Fast in,
+   * slow out, so it hits like an impact and then lets go of the screen.
+   */
+  private drawHit(): void {
+    const { ctx, w, h } = this;
+    const k = this.hit;
+    // The first instant is the punch; the rest is the room settling.
+    const punch = k > 0.82 ? (k - 0.82) / 0.18 : 0;
+    const body = Math.pow(k, 1.6);
+    const rgb = this.hitKind === "dead" ? "255, 45, 111" : "63, 232, 192";
+
+    const g = ctx.createRadialGradient(
+      w / 2,
+      h / 2,
+      Math.min(w, h) * 0.15,
+      w / 2,
+      h / 2,
+      Math.max(w, h) * 0.72,
+    );
+    g.addColorStop(0, `rgba(${rgb}, 0)`);
+    g.addColorStop(1, `rgba(${rgb}, ${0.46 * body})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+
+    if (punch > 0) {
+      ctx.fillStyle = `rgba(${rgb}, ${0.16 * punch})`;
+      ctx.fillRect(0, 0, w, h);
+    }
   }
 
   private drawGrain(): void {
@@ -562,6 +616,11 @@ export class LatticeRenderer {
     ctx.globalAlpha = alpha * 0.96;
     if (img) {
       const s = r * 1.15;
+      // Characters sit on pale ice now, so they need to be lifted off it —
+      // a soft contact shadow does that without touching the art itself.
+      ctx.shadowColor = "rgba(4, 14, 24, 0.5)";
+      ctx.shadowBlur = r * 0.22;
+      ctx.shadowOffsetY = r * 0.06;
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(img, c.x + jx - s / 2, c.y + jy - s / 2, s, s);
       ctx.imageSmoothingEnabled = true;
@@ -660,13 +719,22 @@ export class LatticeRenderer {
       blit(step === 0 ? "hairline" : "heavy", t - step);
     }
 
-    // The art is one material, so "you" needs its own mark on top of it.
+    // Every plate is now the same sheet of ice, so "you" has to be marked
+    // loudly: a cyan wash, a heavy breathing rim, and a glow that carries
+    // across a full field. Finding yourself must never take a second look.
     if (c.state === "you") {
+      const pulse = 0.68 + 0.32 * Math.sin(this.time * 4.2);
+      ctx.save();
       ctx.globalAlpha = alpha;
-      ctx.strokeStyle = "#3fe0d8";
-      ctx.lineWidth = Math.max(1, this.radius * 0.075);
       hexPath(ctx, c.x + jx, c.y + jy, this.radius * scale * 0.97);
+      ctx.fillStyle = `rgba(63, 224, 216, ${0.13 + 0.07 * pulse})`;
+      ctx.fill();
+      ctx.strokeStyle = "#3fe0d8";
+      ctx.shadowColor = "#3fe0d8";
+      ctx.shadowBlur = this.radius * 0.55 * pulse;
+      ctx.lineWidth = Math.max(1.5, this.radius * 0.1);
       ctx.stroke();
+      ctx.restore();
     }
     ctx.globalAlpha = alpha;
   }
@@ -710,7 +778,11 @@ export class LatticeRenderer {
       const inPlay = c.state === "live" || c.state === "you";
 
       if (c.state === "dying") {
-        const k = Math.min(1, c.t / 0.5);
+        // Hold the shattered face at full strength before the plate falls
+        // away. Without the hold it faded from the first frame, so the
+        // broken-ice art was on screen for about a tenth of a second and
+        // players never actually saw the plate break.
+        const k = Math.max(0, Math.min(1, (c.t - 0.2) / 0.45));
         alpha *= 1 - k;
         scale *= 1 - k * 0.3;
         if (k >= 1) continue;
@@ -742,8 +814,23 @@ export class LatticeRenderer {
       // The drawn plate face, laid over the procedural one so its glow and
       // rim still frame the plate. Everyone shows the same stage of failure:
       // the field shares one hazard, so it must read as one sheet of ice.
-      if (tiles && (inPlay || c.state === "dying")) {
+      if (tiles && c.state !== "cashed") {
         this.drawTileFace(c, tiles, stress, alpha, scale, jx, jy + dy);
+      } else if (tiles) {
+        // A vacated plate keeps its ice, drained of light: the lattice reads
+        // as one sheet with people missing from it, not as black holes.
+        const ghost = tiles.get("base");
+        if (ghost) {
+          ctx.globalAlpha = alpha * 0.26;
+          ctx.drawImage(
+            ghost,
+            c.x - (tiles.w * scale) / 2 + jx,
+            c.y - (tiles.h * scale) / 2 + jy + dy,
+            tiles.w * scale,
+            tiles.h * scale,
+          );
+          ctx.globalAlpha = alpha;
+        }
       }
 
       // The character standing on the plate. Only while they are actually
