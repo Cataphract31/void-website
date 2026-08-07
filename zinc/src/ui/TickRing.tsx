@@ -68,6 +68,11 @@ export function TickRing({ snap, tickMs }: { snap: Snapshot; tickMs: number }): 
                 : bandLabel(band)
               : "danger"}
           </div>
+          {live && (
+            <div className="label tnum mt-0.5" style={{ fontSize: 8.5, opacity: 0.75 }}>
+              tick {snap.tick}
+            </div>
+          )}
         </div>
       </div>
     </div>

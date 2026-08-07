@@ -272,10 +272,25 @@ export class LatticeRenderer {
     this.radius = r;
     this.atlas = new CellAtlas(r, this.dpr);
 
-    const usedCols = Math.min(cols, Math.ceil(n / rows));
+    // Shape the occupied block to the canvas, not to whatever the capacity
+    // grid happens to be. Since the radius cap landed, a half-full desktop
+    // lobby had far more rows than it needed and players stacked into one or
+    // two tall columns; picking the row count so the block's aspect tracks
+    // the canvas brings back the beehive cluster at every population.
+    const aspect = (availW * hexH) / (availH * 1.5);
+    let usedRows = Math.max(
+      1,
+      Math.min(rows, Math.round(Math.sqrt(n / Math.max(0.1, aspect)))),
+    );
+    let usedCols = Math.ceil(n / usedRows);
+    if (usedCols > cols) {
+      usedCols = cols;
+      usedRows = Math.min(rows, Math.ceil(n / usedCols));
+    }
+
     const gridW = usedCols * r * 1.5 + r * 0.5;
     // Includes the stagger, so centring can never push plates out of frame.
-    const gridH = rows * r * hexH + (r * hexH) / 2;
+    const gridH = usedRows * r * hexH + (r * hexH) / 2;
     const startX = (this.w - gridW) / 2 + r;
     const startY = top + (availH - gridH) / 2 + (r * hexH) / 2;
 
@@ -283,8 +298,8 @@ export class LatticeRenderer {
 
     const kept = new Map<number, Cell>();
     inputs.forEach((input, i) => {
-      const col = Math.floor(i / rows);
-      const row = i % rows;
+      const col = Math.floor(i / usedRows);
+      const row = i % usedRows;
       const x = startX + col * r * 1.5;
       const y = startY + row * r * Math.sqrt(3) + (col % 2 ? (r * Math.sqrt(3)) / 2 : 0);
       const prev = this.cells.get(input.id);

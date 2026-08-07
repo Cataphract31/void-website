@@ -209,6 +209,7 @@ interface SaveState {
   charId?: string;
   revStreamed?: number;
   teamWins?: Record<string, number>;
+  roundId?: number;
 }
 
 function loadSave(): SaveState | null {
@@ -268,7 +269,8 @@ export class GameClient {
   private round: Round | null = null;
   private phase: Phase = "lobby";
   private phaseEnd = 0;
-  private roundId = 1041;
+  // openLobby increments first, so the first round players see is #1.
+  private roundId = 0;
   private names = new Map<number, string>();
   private joined = false;
   private lobbyEntrants: Entrant[] = [];
@@ -337,6 +339,11 @@ export class GameClient {
       // and a restored marker would sit above it, silently blocking claims.
       this.revStreamedLifetime = save.revStreamed ?? 0;
       if (save.teamWins) this.teamWins = save.teamWins;
+      // The round counter keeps climbing across refreshes instead of the
+      // site appearing to reset to round one every visit.
+      if (typeof save.roundId === "number" && save.roundId > 0) {
+        this.roundId = save.roundId;
+      }
     }
 
     this.openLobby();
@@ -692,6 +699,7 @@ export class GameClient {
         charId: this.charId,
         revStreamed: this.revStreamedLifetime,
         teamWins: this.teamWins,
+        roundId: this.roundId,
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(s));
     } catch {
