@@ -118,7 +118,7 @@ function phantom(): PhantomProvider | null {
  * the page. For now the connection only proves the flow and shows the address;
  * balances stay in the demo wallet until the server and program land.
  */
-function WalletButton(): JSX.Element {
+function WalletButton({ onChange }: { onChange?: () => void }): JSX.Element {
   const [addr, setAddr] = useState<string | null>(null);
 
   // Reconnect silently if the player has approved this site before.
@@ -138,11 +138,13 @@ function WalletButton(): JSX.Element {
     if (addr) {
       await p.disconnect().catch(() => {});
       setAddr(null);
+      onChange?.();
       return;
     }
     try {
       const r = await p.connect();
       setAddr(r.publicKey.toString());
+      onChange?.();
     } catch {
       // Player closed the Phantom prompt; nothing to do.
     }
@@ -275,10 +277,14 @@ export function TopBar({
   snap,
   onShowInfo,
   onShowChars,
+  onWalletChange,
 }: {
   snap: Snapshot;
   onShowInfo: () => void;
   onShowChars: () => void;
+  /** Networked play authenticates at socket open, so a wallet that connects
+      after that needs the handshake re-run or it stays seated as a guest. */
+  onWalletChange?: () => void;
 }): JSX.Element {
   return (
     <div className="px-3 py-2">
@@ -286,7 +292,9 @@ export function TopBar({
         <div className="display text-[15px] font-bold tracking-[0.16em]">
           THIN<span className="text-[var(--color-cyan)]">ICE</span>
         </div>
-        <div className="label">#{snap.roundId}</div>
+        {/* Round 0 does not exist — the counter increments before the first
+            lobby opens — so it must not be shown while still connecting. */}
+        <div className="label">{snap.roundId > 0 ? `#${snap.roundId}` : "—"}</div>
 
         {/* Desktop: stats inline. */}
         <div className="ml-auto hidden items-center gap-4 sm:flex">
@@ -301,7 +309,7 @@ export function TopBar({
           >
             <CharArt charId={snap.charId} pose="head" size={22} />
           </button>
-          <WalletButton />
+          <WalletButton onChange={onWalletChange} />
           <IconButton label="How it works" onClick={onShowInfo}>
             ⓘ
           </IconButton>
@@ -330,6 +338,18 @@ export function AutoPanel({
   onChange: (patch: Partial<AutoSettings>) => void;
 }): JSX.Element {
   const on = snap.auto.enabled;
+  // Typed text is held locally and only committed on blur or Enter. Feeding
+  // every keystroke through a clamped round trip fought the keyboard: typing
+  // "1.5" clamped "1" to 1.05 mid-entry and produced "1.055", and clearing the
+  // field snapped it straight back.
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = (): void => {
+    if (draft === null) return;
+    const v = Number(draft);
+    onChange({ target: Number.isFinite(v) && v > 0 ? v : snap.auto.target });
+    setDraft(null);
+  };
+
   return (
     <div className="flex items-center gap-2 rounded-md bg-[var(--color-panel)] px-2.5 py-2">
       <button
@@ -348,8 +368,12 @@ export function AutoPanel({
         type="number"
         min={1.05}
         step={0.05}
-        value={snap.auto.target}
-        onChange={(e) => onChange({ target: Number(e.target.value) })}
+        value={draft ?? snap.auto.target}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+        }}
         aria-label="Auto exit target"
         className="tnum w-[64px] rounded-sm bg-[var(--color-panel2)] px-1.5 py-1 text-right text-[13px] font-semibold text-[var(--color-text)] outline-none focus:ring-1 focus:ring-[var(--color-cyan)]"
       />
@@ -389,6 +413,21 @@ export function ActionBar({
   let action: (() => void) | null = null;
   let tone = "idle";
 
+  // A dropped socket silently discards every intent, so an enabled button here
+  // takes the player's tap and does nothing at all — the worst possible
+  // behaviour for the control that extracts their money.
+  if (!snap.connected) {
+    return wrap(
+      <button
+        disabled
+        className="display h-13 w-full rounded-sm bg-[var(--color-panel2)] py-3.5 text-[17px] font-bold tracking-[0.1em] text-[var(--color-warn)]"
+      >
+        Reconnecting…
+      </button>,
+      inline,
+    );
+  }
+
   if (snap.phase === "lobby") {
     if (snap.you.joined) {
       label = `Bonded, sealing in ${secs}s`;
@@ -420,16 +459,20 @@ export function ActionBar({
         ? "bg-[var(--color-profit)] text-[#03231a]"
         : "bg-[var(--color-panel2)] text-[var(--color-dim)]";
 
-  const button = (
+  return wrap(
     <button
       disabled={!action}
       onClick={action ?? undefined}
       className={`display h-13 w-full rounded-sm py-3.5 text-[17px] font-bold tracking-[0.1em] transition-transform active:scale-[0.985] disabled:cursor-not-allowed ${bg}`}
     >
       {label}
-    </button>
+    </button>,
+    inline,
   );
+}
 
+/** Bottom bar on mobile, bare button in the desktop column. */
+function wrap(button: JSX.Element, inline: boolean): JSX.Element {
   if (inline) return button;
   return <div className="bg-[var(--color-pit)]/95 px-3 py-2.5 backdrop-blur">{button}</div>;
 }

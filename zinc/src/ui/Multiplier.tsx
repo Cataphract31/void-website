@@ -16,7 +16,15 @@ export function Multiplier({ snap }: { snap: Snapshot }): JSX.Element {
   const [delta, setDelta] = useState<number | null>(null);
 
   useEffect(() => {
-    if (snap.phase !== "live") return;
+    // Leaving "live" clears the chip instead of returning early. The last jolt
+    // and the end of the round are usually the same tick, so the pending
+    // timeout got cancelled by this effect re-running and the green "+0.12"
+    // sat frozen beside the final number through the whole result phase.
+    if (snap.phase !== "live") {
+      setDelta(null);
+      prev.current = snap.multiplier;
+      return;
+    }
     const d = snap.multiplier - prev.current;
     if (d > 0.0005) {
       setJolt((j) => j + 1);

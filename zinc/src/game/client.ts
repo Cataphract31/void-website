@@ -3,11 +3,13 @@ import {
   DEFAULT_CONFIG,
   RevShareLedger,
   Round,
+  canonicalConfig,
   drawFieldSize,
   hazardAt,
   mulberry32,
   outcomeDigest,
   replayRound,
+  rngFromSeedHex,
   totalRake,
   type Entrant,
   type GameConfig,
@@ -57,6 +59,8 @@ export interface PlayerView {
   /** Multiple of the entry paid. 1.00 is break-even. */
   multiple: number;
   balance: number;
+  /** Ticks spent standing on the ice. Still climbing while they are alive. */
+  ticksSurvived: number;
 }
 
 /** Who the winner scene celebrates once a round ends. */
@@ -93,8 +97,6 @@ export interface DevSettings {
   speed: number;
   /** Overrides the per-round jackpot chance so it can be seen firing. */
   bonanzaOdds: number | null;
-  /** Chad/snowflake roster heads and the end-of-round slap. */
-  memeMode: boolean;
   /**
    * Forces the DISPLAYED danger — ring, seam glow, cracking, trembling, tick
    * audio — without touching the actual elimination rolls. High-risk visuals
@@ -179,20 +181,46 @@ export interface Snapshot {
   /** Fairness commitment for the round currently forming or running. */
   nextCommit: string;
   auto: AutoSettings;
+  /** Lifetime record. Server-authoritative in net play, local in the demo. */
+  stats: PlayerStats;
+  /** Humans connected right now. Always 1 offline. */
+  online: number;
+  /** False while the socket is down, so the UI can say so instead of freezing. */
+  connected: boolean;
   dev: DevSettings;
+}
+
+export interface PlayerStats {
+  roundsPlayed: number;
+  /** Rounds that came back at or above the entry. */
+  roundsWon: number;
+  /** Everything ever staked. */
+  wagered: number;
+  /** Everything ever paid back. */
+  returned: number;
+  bestMultiple: number;
+  /** Lifetime rakeback received. */
+  revEarned: number;
 }
 
 const YOU_ID = 9999;
 
-/** sha256 as lowercase hex. Available on localhost and any https origin. */
-async function sha256Hex(s: string): Promise<string> {
-  if (!crypto?.subtle) return "";
+/**
+ * sha256 as lowercase hex, or null where the browser will not provide it.
+ *
+ * `crypto.subtle` does not exist on an insecure origin — testing over a LAN
+ * IP, for instance. Returning null rather than "" matters: an empty string
+ * compares unequal to the commitment and would brand every honest round a
+ * mismatch, which is the single worst thing this panel could say.
+ */
+export async function sha256Hex(s: string): Promise<string | null> {
+  if (!crypto?.subtle) return null;
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-function commitPreimage(roundId: number, seedHex: string): string {
-  return `thinice:${roundId}:${seedHex}`;
+export function commitPreimage(roundId: number, seedHex: string, rulesHash: string): string {
+  return `thinice:${roundId}:${seedHex}:${rulesHash}`;
 }
 
 const SAVE_KEY = "zinc.save.v1";
@@ -210,6 +238,7 @@ interface SaveState {
   revStreamed?: number;
   teamWins?: Record<string, number>;
   roundId?: number;
+  stats?: PlayerStats;
 }
 
 function loadSave(): SaveState | null {
@@ -218,9 +247,77 @@ function loadSave(): SaveState | null {
     if (!raw) return null;
     const s = JSON.parse(raw) as SaveState;
     if (!Number.isFinite(s.wallet)) return null;
-    return s;
+    // Every numeric field is scrubbed, not just the wallet. A save from an
+    // older schema (or an edited one) carries undefined where a number is
+    // expected, and feeding that into the rev-share ledger poisons the weight
+    // totals with NaN — after which every percentage in the HUD reads "NaN%"
+    // and no reload fixes it, because the bad value is what got persisted.
+    const num = (v: unknown, fallback = 0): number =>
+      typeof v === "number" && Number.isFinite(v) ? v : fallback;
+    return {
+      ...s,
+      wallet: num(s.wallet),
+      session: num(s.session),
+      pool: num(s.pool),
+      bTickets: num(s.bTickets),
+      revLifetime: num(s.revLifetime),
+      revWeight: num(s.revWeight),
+      revStreamed: num(s.revStreamed),
+      autoTarget: num(s.autoTarget, 2),
+      roundId: num(s.roundId),
+    };
   } catch {
     return null;
+  }
+}
+
+/**
+ * The verification both clients run. One implementation on purpose: the local
+ * demo and the networked build must reach a verdict the same way, or the demo
+ * proves nothing about the thing players will actually be paid by.
+ *
+ * Mutates the entry in place with its three receipts.
+ */
+export async function verifyEntry(h: HistoryEntry, expected: GameConfig): Promise<void> {
+  try {
+    // Replay under the rules recorded with the round, not the ones this build
+    // ships: a round played before a config change is still an honest round.
+    const rules = h.record.config ?? expected;
+    const replay = replayRound(rules, h.record);
+    h.replayOk = outcomeDigest(replay) === h.digest;
+
+    const canonical = canonicalConfig(rules);
+    const rulesHash = await sha256Hex(canonical);
+    if (rulesHash === null) {
+      // No hashing available (insecure origin). Refuse to render a verdict
+      // rather than report a mismatch we have not actually found.
+      h.unavailable = true;
+      h.seedOk = null;
+      h.rulesOk = null;
+      h.verified = null;
+      return;
+    }
+
+    if (h.record.seedHex === undefined) {
+      // A round from before the rules were folded into the commitment. Check
+      // it against the ceremony it was actually played under rather than
+      // calling it a mismatch: the old commitment covered the seed alone, so
+      // that is exactly — and only — what can honestly be verified about it.
+      h.seedOk = h.commit !== "" && (await sha256Hex(`thinice:${h.roundId}:${h.seedHex}`)) === h.commit;
+      h.rulesOk = null;
+      h.verified = h.replayOk === true && h.seedOk === true;
+      return;
+    }
+
+    const hash = await sha256Hex(commitPreimage(h.roundId, h.seedHex, rulesHash));
+    h.seedOk = h.commit !== "" && hash === h.commit;
+    h.rulesOk = canonical === canonicalConfig(expected);
+    h.verified = h.replayOk === true && h.seedOk === true && h.rulesOk === true;
+  } catch {
+    h.verified = false;
+    h.seedOk = h.seedOk ?? false;
+    h.replayOk = h.replayOk ?? false;
+    h.rulesOk = h.rulesOk ?? false;
   }
 }
 
@@ -243,6 +340,14 @@ export interface HistoryEntry {
   seedOk: boolean | null;
   /** Receipt: did the replay reproduce every tick and every balance? */
   replayOk: boolean | null;
+  /**
+   * Receipt: were the rules this round ran under the same rules this build
+   * advertises? A round can replay perfectly under rigged numbers, so without
+   * this check the other two prove only internal consistency.
+   */
+  rulesOk: boolean | null;
+  /** True when the browser cannot hash at all, so no verdict is honest. */
+  unavailable?: boolean;
   record: RoundRecord;
   immortal: boolean;
   digest: string;
@@ -252,7 +357,17 @@ export interface HistoryEntry {
 }
 
 export class GameClient {
+  /** Discriminant: the dev tools only make sense against the local driver. */
+  readonly isLocal = true;
   private config: GameConfig = DEFAULT_CONFIG;
+  private stats: PlayerStats = {
+    roundsPlayed: 0,
+    roundsWon: 0,
+    wagered: 0,
+    returned: 0,
+    bestMultiple: 0,
+    revEarned: 0,
+  };
   /** Presentation-side randomness only: bot personalities, names, arrivals. */
   private rng = mulberry32((Date.now() & 0xffffffff) >>> 0);
   /**
@@ -262,9 +377,12 @@ export class GameClient {
    * possible. In production the server runs this same ceremony and the
    * client only checks it.
    */
-  private roundSeed = 0;
   private roundSeedHex = "";
   private roundCommit = "";
+  /** Hash of the rules each round is committed under, alongside the seed. */
+  private rulesHash = "";
+  /** The exact rules the sealed round is running, recorded for replay. */
+  private roundRules: GameConfig | null = null;
   private history: HistoryEntry[] = [];
   private round: Round | null = null;
   private phase: Phase = "lobby";
@@ -313,7 +431,6 @@ export class GameClient {
     fieldSize: null,
     speed: 1,
     bonanzaOdds: null,
-    memeMode: true,
     hazardOverride: null,
     immortal: false,
   };
@@ -343,6 +460,7 @@ export class GameClient {
       // and a restored marker would sit above it, silently blocking claims.
       this.revStreamedLifetime = save.revStreamed ?? 0;
       if (save.teamWins) this.teamWins = save.teamWins;
+      if (save.stats) this.stats = save.stats;
       // The round counter keeps climbing across refreshes instead of the
       // site appearing to reset to round one every visit.
       if (typeof save.roundId === "number" && save.roundId > 0) {
@@ -462,15 +580,23 @@ export class GameClient {
 
     // Commit-reveal: draw the round's seed from the CSPRNG and publish its
     // hash before anyone is even sealed in.
-    const buf = new Uint32Array(1);
+    // 128 bits. A 32-bit seed is enumerable against the published commitment
+    // inside a lobby, which would turn the fairness proof into the exploit.
+    const buf = new Uint8Array(16);
     crypto.getRandomValues(buf);
-    this.roundSeed = buf[0]!;
-    this.roundSeedHex = this.roundSeed.toString(16).padStart(8, "0");
+    this.roundSeedHex = [...buf].map((b) => b.toString(16).padStart(2, "0")).join("");
     this.roundCommit = "";
-    void sha256Hex(commitPreimage(this.roundId, this.roundSeedHex)).then((h) => {
-      this.roundCommit = h;
+    const seedHex = this.roundSeedHex;
+    const roundId = this.roundId;
+    void (async () => {
+      if (!this.rulesHash) this.rulesHash = (await sha256Hex(canonicalConfig(this.config))) ?? "";
+      const h = await sha256Hex(commitPreimage(roundId, seedHex, this.rulesHash));
+      // A late hash from a round that has already rolled must not overwrite
+      // the current one.
+      if (this.roundSeedHex !== seedHex) return;
+      this.roundCommit = h ?? "";
       this.emit();
-    });
+    })();
 
     const n = this.dev.fieldSize ?? drawFieldSize(this.config, this.rng.next());
     const now = Date.now();
@@ -498,6 +624,27 @@ export class GameClient {
     this.emit();
   }
 
+  /**
+   * The rate the NEXT roll runs at, given the field as it stands right now.
+   * Every risk channel — ring, seams, cracking, audio — reads this one number,
+   * so they cannot disagree with each other.
+   */
+  private forwardHazard(): number {
+    const round = this.round;
+    if (!round || this.phase !== "live" || round.finished) return 0;
+    const live = round.players.filter((p) => p.outcome === "in").length;
+    if (live <= 0) return 0;
+    // The round's own config, not the client's: an immortal test round runs
+    // with the hazard zeroed, and reading the global config would show danger
+    // on a lattice where nobody can actually fall through.
+    return hazardAt(
+      round.config.hazard,
+      round.currentTick + 1,
+      live,
+      round.players.length,
+    );
+  }
+
   /** Bots that have walked in so far this lobby. */
   private arrived(): Entrant[] {
     const now = Date.now();
@@ -518,7 +665,8 @@ export class GameClient {
         }
       : this.config;
     this.roundImmortal = this.dev.immortal;
-    this.round = new Round(cfg, mulberry32(this.roundSeed), this.lobbyEntrants);
+    this.roundRules = cfg;
+    this.round = new Round(cfg, rngFromSeedHex(this.roundSeedHex), this.lobbyEntrants);
     this.phase = "live";
     this.nextTickAt = Date.now() + this.config.timing.tickMs / this.dev.speed;
     this.say("seal", `Lattice sealed: ${this.lobbyEntrants.length} plates`);
@@ -559,7 +707,12 @@ export class GameClient {
       this.say("death", `${deaths} shattered`, `${this.currentMultiplier().toFixed(2)}×`);
       sfxShatter(deaths);
     } else {
-      sfxTick(this.dev.hazardOverride ?? round.hazard);
+      // The forward-looking rate, matching every visual. `round.hazard` is the
+      // tick that already resolved, so after a mass shatter the ring and the
+      // seams cool instantly while the next tick still *sounds* like the
+      // pre-shatter danger — the two channels riskScale exists to unify,
+      // disagreeing for one tick after every death wave.
+      sfxTick(this.dev.hazardOverride ?? this.forwardHazard());
     }
     if (youDied) sfxYouDied();
 
@@ -614,6 +767,10 @@ export class GameClient {
       if (you) {
         this.wallet += you.cashedOut;
         this.session += you.cashedOut - this.config.entry;
+        const mult = you.cashedOut / this.config.entry;
+        this.stats.returned += you.cashedOut;
+        this.stats.bestMultiple = Math.max(this.stats.bestMultiple, mult);
+        if (mult >= 1) this.stats.roundsWon++;
       }
 
       // Rakeback auto-claims into the wallet. Without this the client charges
@@ -626,6 +783,7 @@ export class GameClient {
         this.session += delta;
         this.rakebackClaimed = owed;
         this.revStreamedLifetime += delta;
+        this.stats.revEarned = this.revStreamedLifetime;
         this.say("info", "Rakeback streamed", `+${delta.toFixed(4)} ◎`);
       }
 
@@ -668,8 +826,10 @@ export class GameClient {
         verified: null,
         seedOk: null,
         replayOk: null,
+        rulesOk: null,
         record: {
-          seed: this.roundSeed,
+          seedHex: this.roundSeedHex,
+          config: this.roundRules ?? this.config,
           entrantIds: res.players.map((p) => p.id),
           cashOuts: res.cashOuts,
         },
@@ -704,6 +864,7 @@ export class GameClient {
         revStreamed: this.revStreamedLifetime,
         teamWins: this.teamWins,
         roundId: this.roundId,
+        stats: this.stats,
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(s));
     } catch {
@@ -762,27 +923,16 @@ export class GameClient {
 
   /**
    * Re-runs a finished round from its revealed seed and exit schedule, then
-   * checks two things: the outcome matches what was watched live, and the
-   * revealed seed hashes to the commitment that was published before the
-   * round sealed. Both must hold for the round to be called fair.
+   * checks three things: the outcome matches what was watched live, the
+   * revealed seed hashes to the commitment published before the round sealed,
+   * and the rules it ran under are the rules this build advertises. All three
+   * must hold — a round can replay perfectly under rigged numbers, so the
+   * first two alone prove only that the operator is self-consistent.
    */
   async verifyRound(roundId: number): Promise<void> {
     const h = this.history.find((x) => x.roundId === roundId);
     if (!h) return;
-    try {
-      const cfg = h.immortal
-        ? { ...this.config, hazard: { ...this.config.hazard, q0: 0, creep: 0, qMin: 0 } }
-        : this.config;
-      const replay = replayRound(cfg, h.record);
-      h.replayOk = outcomeDigest(replay) === h.digest;
-      const hash = await sha256Hex(commitPreimage(h.roundId, h.seedHex));
-      h.seedOk = h.commit !== "" && hash === h.commit;
-      h.verified = h.replayOk && h.seedOk;
-    } catch {
-      h.verified = false;
-      h.seedOk = h.seedOk ?? false;
-      h.replayOk = h.replayOk ?? false;
-    }
+    await verifyEntry(h, this.config);
     this.emit();
   }
 
@@ -835,6 +985,8 @@ export class GameClient {
     if (this.wallet < this.config.entry) return;
     this.wallet -= this.config.entry;
     this.joined = true;
+    this.stats.roundsPlayed++;
+    this.stats.wagered += this.config.entry;
     this.say("you", "You bonded into the lattice", `-${this.config.entry} ◎`);
     sfxJoin();
     this.emit();
@@ -893,6 +1045,7 @@ export class GameClient {
       outcome: p.outcome,
       multiple: (p.outcome === "in" ? p.balance : p.cashedOut) / this.config.entry,
       balance: p.outcome === "in" ? p.balance : p.cashedOut,
+      ticksSurvived: p.ticksSurvived,
     };
   }
 
@@ -915,6 +1068,7 @@ export class GameClient {
               outcome: "in" as const,
               multiple: 1 - totalRake(cfg),
               balance: cfg.entry * (1 - totalRake(cfg)),
+              ticksSurvived: 0,
             })),
             ...(this.joined
               ? [
@@ -926,6 +1080,7 @@ export class GameClient {
                     outcome: "in" as const,
                     multiple: 1 - totalRake(cfg),
                     balance: cfg.entry * (1 - totalRake(cfg)),
+                    ticksSurvived: 0,
                   },
                 ]
               : []),
@@ -940,11 +1095,7 @@ export class GameClient {
       ? Math.max(0, cfg.hazard.graceTicks - round.currentTick)
       : cfg.hazard.graceTicks;
 
-    // Forward-looking: the rate the next roll runs at given the field NOW.
-    const realHazard =
-      round && this.phase === "live" && !round.finished && live > 0
-        ? hazardAt(cfg.hazard, round.currentTick + 1, live, round.players.length)
-        : 0;
+    const realHazard = this.forwardHazard();
     // Dev override rigs only the display; the actual rolls are untouched.
     const hazard =
       this.phase === "live" ? (this.dev.hazardOverride ?? realHazard) : realHazard;
@@ -989,6 +1140,9 @@ export class GameClient {
       history: this.history,
       nextCommit: this.roundCommit,
       auto: this.auto,
+      stats: this.stats,
+      online: 1,
+      connected: true,
       dev: this.dev,
     };
   }

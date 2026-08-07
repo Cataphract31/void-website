@@ -137,6 +137,11 @@ export class LatticeRenderer {
 
   resize(): void {
     const rect = this.canvas.getBoundingClientRect();
+    // Re-read the pixel ratio here rather than trusting the one sampled at
+    // construction: dragging the window to a display with a different density,
+    // or zooming the browser, changes it, and a backing store rebuilt at the
+    // stale ratio leaves the whole lattice blurry until a reload.
+    this.dpr = Math.min(2, window.devicePixelRatio || 1);
     this.w = Math.max(1, rect.width);
     this.h = Math.max(1, rect.height);
     this.canvas.width = Math.ceil(this.w * this.dpr);
@@ -204,10 +209,15 @@ export class LatticeRenderer {
     // rounds can have the same population with different ids (join one round,
     // sit out the next), and a count-only key skipped relayout — leaving one
     // player never drawn and a stale plate from the previous round on screen.
-    // Ids are sequential plus the fixed YOU id, so first:last:count is enough.
-    const first = snap.cells[0]?.id ?? -1;
-    const last = snap.cells[snap.cells.length - 1]?.id ?? -1;
-    const key = `${snap.cells.length}:${first}:${last}:${this.w | 0}:${this.h | 0}`;
+    //
+    // A cheap sum-and-count summary rather than first:last:count. The old key
+    // relied on ids being sequential, which is a property of the local demo's
+    // id allocator and nothing the server promises; two rosters that agreed on
+    // count, first and last but differed in the middle would silently skip
+    // relayout and reproduce exactly the bug this key exists to prevent.
+    let sig = 0;
+    for (const c of snap.cells) sig = (sig * 31 + c.id) >>> 0;
+    const key = `${snap.cells.length}:${sig}:${this.w | 0}:${this.h | 0}`;
     if (key !== this.layoutKey) {
       this.layout(snap.cells);
       this.layoutKey = key;

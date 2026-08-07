@@ -1,5 +1,5 @@
 import type { GameConfig } from "./config.js";
-import { mulberry32 } from "./rng.js";
+import { mulberry32, rngFromSeedHex } from "./rng.js";
 import { Round, type CashOutRecord, type Entrant, type RoundResult } from "./round.js";
 
 /**
@@ -17,15 +17,51 @@ import { Round, type CashOutRecord, type Entrant, type RoundResult } from "./rou
  * exists for simulations, where replays are not needed.
  *
  * The commit-reveal ceremony built on top of this:
- *   1. before a round seals, publish sha256(tag : roundId : seedHex)
+ *   1. before a round seals, publish sha256(tag : roundId : seedHex : rulesHash)
  *   2. run the round
  *   3. reveal the seed; anyone recomputes the hash and replays the round
+ *
+ * The rules hash is in the commitment for the same reason the seed is: a round
+ * replayed under different numbers than it was played under produces different
+ * results, so a ceremony that binds only the seed proves nothing about the
+ * game you actually played.
  */
 export interface RoundRecord {
-  seed: number;
+  /**
+   * The round's seed, 128 bits of hex. See `rngFromSeedHex` for why a 32-bit
+   * seed is not merely weaker but actively broken under commit-reveal.
+   */
+  seedHex?: string;
+  /** Legacy 32-bit seed. Only for replaying rounds recorded before the fix. */
+  seed?: number;
+  /**
+   * The exact rules the round ran under. Present so a replay uses the numbers
+   * that were live at the time rather than whatever the verifier's build
+   * happens to ship — otherwise every honest round played before a config
+   * change fails verification, which is indistinguishable from cheating.
+   */
+  config?: GameConfig;
   /** Entrants in seal order. Order matters: it fixes RNG draw order. */
   entrantIds: number[];
   cashOuts: CashOutRecord[];
+}
+
+/**
+ * A stable string form of the rules, so they can be hashed into a commitment
+ * and compared across machines. Keys are sorted at every level: object key
+ * order is an accident of construction and must not change the hash.
+ */
+export function canonicalConfig(config: GameConfig): string {
+  const walk = (v: unknown): string => {
+    if (v === null || typeof v !== "object") return JSON.stringify(v) ?? "null";
+    if (Array.isArray(v)) return `[${v.map(walk).join(",")}]`;
+    const keys = Object.keys(v as Record<string, unknown>).sort();
+    const body = keys
+      .map((k) => `${JSON.stringify(k)}:${walk((v as Record<string, unknown>)[k])}`)
+      .join(",");
+    return `{${body}}`;
+  };
+  return walk(config);
 }
 
 export function replayRound(config: GameConfig, rec: RoundRecord): RoundResult {
@@ -53,7 +89,16 @@ export function replayRound(config: GameConfig, rec: RoundRecord): RoundResult {
     },
   }));
 
-  const round = new Round(config, mulberry32(rec.seed), entrants);
+  // The round's own rules win over the verifier's: see RoundRecord.config.
+  const rules = rec.config ?? config;
+  // Rounds recorded before the seed was widened still have to stay verifiable,
+  // so the legacy 32-bit path survives here — and only here. Nothing live may
+  // produce one: `rngFromSeedHex` refuses a short seed at the source.
+  const rng =
+    rec.seedHex !== undefined
+      ? rngFromSeedHex(rec.seedHex)
+      : mulberry32(rec.seed ?? 0);
+  const round = new Round(rules, rng, entrants);
   for (const id of manualByTick.get(0) ?? []) round.cashOut(id);
   while (!round.finished) {
     round.step();

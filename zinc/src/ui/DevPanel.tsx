@@ -145,7 +145,7 @@ export function DevPanel({
                 color: snap.dev.hazardOverride === h ? "var(--color-cyan)" : undefined,
               }}
             >
-              {h === null ? "real" : `${h * 100}%`}
+              {h === null ? "real" : `${(h * 100).toFixed(1)}%`}
             </button>
           ))}
         </div>
@@ -167,17 +167,6 @@ export function DevPanel({
         className="label mb-2 w-full rounded-sm border border-[var(--color-edge2)] py-1.5 hover:text-[var(--color-text)]"
       >
         skip to next phase
-      </button>
-
-      <button
-        onClick={() => client.setDev({ memeMode: !snap.dev.memeMode })}
-        className="label mb-2.5 w-full rounded-sm border py-1.5"
-        style={{
-          borderColor: snap.dev.memeMode ? "var(--color-cyan)" : "var(--color-edge2)",
-          color: snap.dev.memeMode ? "var(--color-cyan)" : undefined,
-        }}
-      >
-        meme mode {snap.dev.memeMode ? "on" : "off"}
       </button>
 
       <SoundTest />

@@ -1,9 +1,11 @@
 import { useEffect, useState, type JSX } from "react";
-import { getGameClient, type PlayerView, type Snapshot } from "@/game/client";
+import type { PlayerView, Snapshot } from "@/game/client";
+import { getClient } from "@/game/session";
 import { Shaft } from "@/ui/Shaft";
 import { Multiplier } from "@/ui/Multiplier";
 import { Roster } from "@/ui/Ledger";
 import { HistoryPanel } from "@/ui/History";
+import { StatsPanel } from "@/ui/Stats";
 import { TickRing } from "@/ui/TickRing";
 import { BonanzaOverlay } from "@/ui/Bonanza";
 import { DevPanel } from "@/ui/DevPanel";
@@ -20,14 +22,16 @@ import { DEFAULT_CONFIG } from "@zinc/engine";
 // the ring animation silently races the wrong clock the moment timing changes.
 const TICK_MS = DEFAULT_CONFIG.timing.tickMs;
 
+type Tab = "roster" | "history" | "stats";
+
 export default function App(): JSX.Element {
-  const client = getGameClient();
+  const client = getClient();
   const [snap, setSnap] = useState<Snapshot>(() => client.snapshot());
   const [selected, setSelected] = useState<number | null>(null);
   const [showInfo, setShowInfo] = useState(false);
   const [showIntro, setShowIntro] = useState(() => !tutorialSeen());
   const [showChars, setShowChars] = useState(false);
-  const [tab, setTab] = useState<"roster" | "history">("roster");
+  const [tab, setTab] = useState<Tab>("roster");
 
   useEffect(() => client.subscribe(setSnap), [client]);
   useEffect(() => {
@@ -46,6 +50,11 @@ export default function App(): JSX.Element {
     };
   }, []);
 
+  // Seat ids are only unique within a round: id 3 next round is a different
+  // person. Without this the open card silently becomes a stranger's, still
+  // presenting itself as the same continuous player.
+  useEffect(() => setSelected(null), [snap.roundId]);
+
   const chosen = selected === null ? null : snap.players.find((p) => p.id === selected);
 
   return (
@@ -54,6 +63,9 @@ export default function App(): JSX.Element {
         snap={snap}
         onShowInfo={() => setShowInfo(true)}
         onShowChars={() => setShowChars(true)}
+        onWalletChange={() => {
+          if (!client.isLocal) client.reauth();
+        }}
       />
       <BonanzaBar snap={snap} />
 
@@ -88,7 +100,9 @@ export default function App(): JSX.Element {
             <ShatterCard snap={snap} />
             <WinnerOverlay snap={snap} />
             <BonanzaOverlay event={snap.bonanza} />
-            {import.meta.env.DEV && <DevPanel client={client} snap={snap} />}
+            {import.meta.env.DEV && client.isLocal && (
+              <DevPanel client={client} snap={snap} />
+            )}
           </div>
         </div>
 
@@ -106,8 +120,10 @@ export default function App(): JSX.Element {
             <TabbedPanel snap={snap} tab={tab} onTab={setTab}>
               {tab === "roster" ? (
                 <Roster snap={snap} onSelect={setSelected} />
-              ) : (
+              ) : tab === "history" ? (
                 <HistoryPanel snap={snap} client={client} />
+              ) : (
+                <StatsPanel snap={snap} />
               )}
             </TabbedPanel>
           </div>
@@ -121,8 +137,10 @@ export default function App(): JSX.Element {
         <TabbedPanel snap={snap} tab={tab} onTab={setTab}>
           {tab === "roster" ? (
             <Roster snap={snap} onSelect={setSelected} />
-          ) : (
+          ) : tab === "history" ? (
             <HistoryPanel snap={snap} client={client} />
+          ) : (
+            <StatsPanel snap={snap} />
           )}
         </TabbedPanel>
       </div>
@@ -265,9 +283,14 @@ function PlayerCard({
       </div>
 
       <div className="mt-2 space-y-0.5 border-t border-[var(--color-panel2)] pt-1.5">
+        {/* Time on the ice, not the entry: every entry is the same fixed
+            amount, so printing it on every card says nothing about anybody. */}
         {line(
-          "staked",
-          <span className="tnum text-[11px]">{entry.toFixed(3)} ◎</span>,
+          p.outcome === "in" ? "on the ice" : "survived",
+          <span className="tnum text-[11px]">
+            {((p.ticksSurvived * TICK_MS) / 1000).toFixed(1)}s
+            <span className="text-[var(--color-dim)]"> · {p.ticksSurvived}t</span>
+          </span>,
         )}
         {line(
           p.outcome === "in" ? "unrealised" : "profit",
@@ -350,11 +373,11 @@ function TabbedPanel({
   children,
 }: {
   snap: Snapshot;
-  tab: "roster" | "history";
-  onTab: (t: "roster" | "history") => void;
+  tab: Tab;
+  onTab: (t: Tab) => void;
   children: React.ReactNode;
 }): JSX.Element {
-  const tabBtn = (id: "roster" | "history", label: string): JSX.Element => (
+  const tabBtn = (id: Tab, label: string): JSX.Element => (
     <button
       onClick={() => onTab(id)}
       className="label rounded-sm px-2 py-1"
@@ -371,6 +394,7 @@ function TabbedPanel({
       <div className="flex shrink-0 items-center gap-1 px-1 pt-1">
         {tabBtn("roster", `roster · ${snap.liveCount} in`)}
         {tabBtn("history", "history")}
+        {tabBtn("stats", "stats")}
       </div>
       <div className="min-h-0 flex-1 p-1">{children}</div>
     </div>

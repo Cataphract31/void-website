@@ -54,6 +54,11 @@ export class BonanzaPool {
         winnerId = id;
         break;
       }
+      // `ticketTotal` is a running float sum and the map values are the truth.
+      // If accumulated dust puts the total a hair above the real sum, the walk
+      // falls off the end — so the last holder catches it rather than the fire
+      // being silently swallowed with the pool retained.
+      winnerId = id;
     }
     if (winnerId === -1) return null;
 
@@ -97,7 +102,13 @@ export class RevShareLedger {
   private accPerWeight = 0;
   private debt = new Map<number, number>();
   private settled = new Map<number, number>();
-  private epochMs = 0;
+  /**
+   * Time origin for the decay normalisation, pinned to the first grant rather
+   * than the Unix epoch. Measuring from 1970 makes every stored weight carry a
+   * factor of e^(lambda * 56 years) — around 10^101 — which costs precision
+   * for nothing, since only differences from the origin ever matter.
+   */
+  private epochMs: number | null = null;
   /** Revenue that arrived while nobody held weight. */
   unallocated = 0;
   distributed = 0;
@@ -105,6 +116,12 @@ export class RevShareLedger {
   constructor(private readonly config: RevShareConfig) {
     this.lambda =
       config.halfLifeDays > 0 ? Math.LN2 / (config.halfLifeDays * 86_400_000) : 0;
+  }
+
+  /** The time origin, fixed by whichever call first needs it. */
+  private epoch(nowMs: number): number {
+    if (this.epochMs === null) this.epochMs = nowMs;
+    return this.epochMs;
   }
 
   private settle(playerId: number): void {
@@ -120,7 +137,7 @@ export class RevShareLedger {
   credit(playerId: number, nowMs: number, tickets = this.config.ticketsPerEntry): void {
     if (tickets <= 0) return;
     this.settle(playerId);
-    const scaled = tickets * Math.exp(this.lambda * (nowMs - this.epochMs));
+    const scaled = tickets * Math.exp(this.lambda * (nowMs - this.epoch(nowMs)));
     const next = (this.norm.get(playerId) ?? 0) + scaled;
     this.norm.set(playerId, next);
     this.normTotal += scaled;
@@ -132,21 +149,25 @@ export class RevShareLedger {
   distribute(amount: number, _nowMs: number): void {
     if (amount <= 0) return;
     if (this.normTotal <= 0) {
+      // Nobody to pay yet. Held, not lost: this is rake already taken from
+      // players, and the first holders to appear are owed it.
       this.unallocated += amount;
       return;
     }
-    this.accPerWeight += amount / this.normTotal;
-    this.distributed += amount;
+    const total = amount + this.unallocated;
+    this.unallocated = 0;
+    this.accPerWeight += total / this.normTotal;
+    this.distributed += total;
   }
 
   /** Live, decayed weight — the number a player sees in the UI. */
   weightOf(playerId: number, nowMs: number): number {
     const n = this.norm.get(playerId) ?? 0;
-    return n * Math.exp(-this.lambda * (nowMs - this.epochMs));
+    return n * Math.exp(-this.lambda * (nowMs - this.epoch(nowMs)));
   }
 
   totalWeight(nowMs: number): number {
-    return this.normTotal * Math.exp(-this.lambda * (nowMs - this.epochMs));
+    return this.normTotal * Math.exp(-this.lambda * (nowMs - this.epoch(nowMs)));
   }
 
   /** Never decays. This is the permanent "tickets earned" rank. */
@@ -159,11 +180,28 @@ export class RevShareLedger {
    * and their current decayed weight, both as previously read back out via
    * `lifetimeOf`/`weightOf`. Restoring weight as a fresh grant of its decayed
    * value is exact, because decay only ever depends on time since the grant.
+   *
+   * `alreadyEarned` matters more than it looks. `earningsOf` is a lifetime
+   * running total, and callers pay out the difference between it and what they
+   * have already paid. A restart rebuilds this ledger with an empty `settled`
+   * map, so without seeding it the total restarts at zero, every difference
+   * comes out negative, and the rakeback stream silently stops paying until
+   * fresh earnings exceed the entire pre-restart history — months of nothing,
+   * with no error anywhere. Pass what the caller's own records say it has paid.
    */
-  restore(playerId: number, lifetimeTickets: number, weight: number, nowMs: number): void {
+  restore(
+    playerId: number,
+    lifetimeTickets: number,
+    weight: number,
+    nowMs: number,
+    alreadyEarned = 0,
+  ): void {
+    if (alreadyEarned > 0) {
+      this.settled.set(playerId, (this.settled.get(playerId) ?? 0) + alreadyEarned);
+    }
     if (weight > 0) {
       this.settle(playerId);
-      const scaled = weight * Math.exp(this.lambda * (nowMs - this.epochMs));
+      const scaled = weight * Math.exp(this.lambda * (nowMs - this.epoch(nowMs)));
       const next = (this.norm.get(playerId) ?? 0) + scaled;
       this.norm.set(playerId, next);
       this.normTotal += scaled;

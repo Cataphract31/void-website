@@ -1,5 +1,10 @@
 import { type JSX } from "react";
-import type { GameClient, HistoryEntry, Snapshot } from "@/game/client";
+import type { HistoryEntry, Snapshot } from "@/game/client";
+
+/** Either client verifies rounds the same way: locally, from the seed. */
+interface Verifier {
+  verifyRound(roundId: number): void | Promise<void>;
+}
 import { CharArt } from "@/ui/Chars";
 
 /**
@@ -15,7 +20,7 @@ export function HistoryPanel({
   client,
 }: {
   snap: Snapshot;
-  client: GameClient;
+  client: Verifier;
 }): JSX.Element {
   if (snap.history.length === 0) {
     return (
@@ -108,7 +113,15 @@ function Row({ h, onVerify }: { h: HistoryEntry; onVerify: () => void }): JSX.El
         >
           {h.commit ? h.commit.slice(0, 14) : "no commit"}… / {h.seedHex}
         </span>
-        {h.verified === null ? (
+        {h.unavailable ? (
+          /* No verdict at all rather than a false one: without crypto.subtle
+             (any insecure origin, e.g. testing over a LAN IP) the hash cannot
+             be computed, and calling an honest round a mismatch is the worst
+             thing this panel could possibly say. */
+          <span className="label ml-auto shrink-0 text-[var(--color-warn)]">
+            needs https
+          </span>
+        ) : h.verified === null ? (
           <button
             onClick={onVerify}
             className="label ml-auto shrink-0 rounded-sm bg-[var(--color-panel2)] px-1.5 py-0.5 hover:text-[var(--color-text)]"
@@ -138,6 +151,24 @@ function Row({ h, onVerify }: { h: HistoryEntry; onVerify: () => void }): JSX.El
             {h.replayOk ? "✓" : "✗"} re-ran all {h.ticks} ticks from the seed:{" "}
             {h.entrants} players, every elimination and payout identical
           </div>
+          {/* Without this a round replays perfectly under rigged numbers and
+              still reads "fair" — the other two checks only prove the operator
+              is consistent with itself. Null on rounds played before the rules
+              were folded into the commitment: there is nothing to check them
+              against, and claiming otherwise would be the lie this panel
+              exists to prevent. */}
+          {h.rulesOk === null ? (
+            <div className="text-[var(--color-dim)]">
+              · legacy round: its commitment covered the seed only, not the rules
+            </div>
+          ) : (
+            <div
+              style={{ color: h.rulesOk ? "var(--color-profit)" : "var(--color-danger)" }}
+            >
+              {h.rulesOk ? "✓" : "✗"} played under the published rules: same
+              hazard curve, same rake, same payouts
+            </div>
+          )}
         </div>
       )}
     </div>
