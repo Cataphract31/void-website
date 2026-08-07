@@ -414,11 +414,25 @@ export class LatticeRenderer {
 
   private drawRock(): void {
     const { ctx, w, h } = this;
+    // Lifted off near-black. The hues are unchanged — these are the same cold
+    // blue-greys, just carrying enough luminance that the empty space around
+    // the lattice reads as a room the grid is sitting in rather than as a void
+    // pressing in on it.
     const g = ctx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, "#04070a");
-    g.addColorStop(0.5, "#070c11");
-    g.addColorStop(1, "#04070a");
+    g.addColorStop(0, "#0a1017");
+    g.addColorStop(0.5, "#111b25");
+    g.addColorStop(1, "#0a1017");
     ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+
+    // A soft cold light from above the shaft. Costs almost nothing and does
+    // most of the work of making the space feel open — a flat fill reads as a
+    // wall, a gradient with a source reads as depth.
+    const key = ctx.createRadialGradient(w / 2, -h * 0.1, 0, w / 2, -h * 0.1, h * 0.95);
+    key.addColorStop(0, "rgba(120,170,205,0.10)");
+    key.addColorStop(0.55, "rgba(90,140,180,0.035)");
+    key.addColorStop(1, "rgba(60,110,150,0)");
+    ctx.fillStyle = key;
     ctx.fillRect(0, 0, w, h);
   }
 
@@ -589,19 +603,27 @@ export class LatticeRenderer {
     ctx.restore();
   }
 
-  /** Depth haze and vignette. Kept minimal so the lattice stays the subject. */
+  /**
+   * Depth haze and vignette.
+   *
+   * This was the single biggest source of the closed-in feeling: it crushed
+   * the edges to 78% black, so however bright the backdrop was, the frame
+   * always ended in darkness. It now starts further out and lands far
+   * lighter — still enough to sit the lattice in space and pull the eye to
+   * the middle, but no longer a tunnel.
+   */
   private drawAtmosphere(): void {
     const { ctx, w, h } = this;
     const g = ctx.createRadialGradient(
       w / 2,
       h * 0.5,
-      Math.min(w, h) * 0.3,
+      Math.min(w, h) * 0.45,
       w / 2,
       h * 0.5,
-      Math.max(w, h) * 0.75,
+      Math.max(w, h) * 0.86,
     );
     g.addColorStop(0, "rgba(0,0,0,0)");
-    g.addColorStop(1, "rgba(0,0,0,0.78)");
+    g.addColorStop(1, "rgba(2,5,9,0.42)");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
   }

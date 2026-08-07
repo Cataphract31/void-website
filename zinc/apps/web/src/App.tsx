@@ -7,6 +7,7 @@ import { RiskBar } from "@/ui/RiskBar";
 import { BonanzaOverlay } from "@/ui/Bonanza";
 import { DevPanel } from "@/ui/DevPanel";
 import { ActionBar, BonanzaBar, TopBar } from "@/ui/Hud";
+import { InfoOverlay } from "@/ui/Info";
 import { initAudio } from "@/audio/sound";
 
 const TICK_MS = 500;
@@ -15,6 +16,7 @@ export default function App(): JSX.Element {
   const client = getGameClient();
   const [snap, setSnap] = useState<Snapshot>(() => client.snapshot());
   const [selected, setSelected] = useState<number | null>(null);
+  const [showInfo, setShowInfo] = useState(false);
   const heroRef = useRef<HTMLDivElement>(null);
   const [heroH, setHeroH] = useState(150);
 
@@ -45,7 +47,7 @@ export default function App(): JSX.Element {
 
   return (
     <div className="mx-auto flex h-full max-w-[1180px] flex-col">
-      <TopBar snap={snap} />
+      <TopBar snap={snap} onShowInfo={() => setShowInfo(true)} />
       <BonanzaBar snap={snap} />
 
       <div className="mt-1.5 flex min-h-0 flex-1 gap-2 px-1.5 lg:px-3">
@@ -62,20 +64,24 @@ export default function App(): JSX.Element {
               className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center pt-3 sm:pt-5"
             >
               <Multiplier snap={snap} />
-            </div>
 
-            {snap.phase === "lobby" && (
-              <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center">
-                <div className="rounded-sm border border-[var(--color-edge2)] bg-[var(--color-pit)]/90 px-3 py-1.5 text-center backdrop-blur">
-                  <div className="display text-[13px] tracking-[0.14em] text-[var(--color-text)]">
+              {/* Part of the hero stack, not a separate floating layer. As its
+                  own absolutely-positioned element it had no z-index of its
+                  own and rendered underneath the multiplier — and it was never
+                  included in the measured inset, so the lattice packed straight
+                  through it. */}
+              {snap.phase === "lobby" && (
+                <div className="mt-1 flex items-center gap-2.5 rounded-sm border border-[var(--color-edge2)] bg-[var(--color-pit)]/85 px-3 py-1.5 backdrop-blur">
+                  <span className="display text-[13px] tracking-[0.12em] text-[var(--color-text)]">
                     {snap.totalCount} bonded
-                  </div>
-                  <div className="label mt-0.5 text-[var(--color-cyan)]">
+                  </span>
+                  <span className="text-[var(--color-edge2)]">|</span>
+                  <span className="label text-[var(--color-cyan)]">
                     sealing in {Math.ceil(snap.msToPhaseEnd / 1000)}s
-                  </div>
+                  </span>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {chosen && (
               <div className="absolute bottom-2 left-2 z-20 rounded-sm border border-[var(--color-edge2)] bg-[var(--color-pit)]/95 px-3 py-2 backdrop-blur">
@@ -143,6 +149,8 @@ export default function App(): JSX.Element {
           <Roster snap={snap} onSelect={setSelected} />
         </Panel>
       </div>
+
+      {showInfo && <InfoOverlay onClose={() => setShowInfo(false)} />}
 
       <ActionBar
         snap={snap}

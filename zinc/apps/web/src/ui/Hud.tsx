@@ -55,7 +55,13 @@ function VolumeControl(): JSX.Element {
   );
 }
 
-export function TopBar({ snap }: { snap: Snapshot }): JSX.Element {
+export function TopBar({
+  snap,
+  onShowInfo,
+}: {
+  snap: Snapshot;
+  onShowInfo: () => void;
+}): JSX.Element {
   return (
     <div className="flex items-center gap-3 px-3 py-2">
       <div className="display text-[15px] font-bold tracking-[0.16em]">
@@ -95,6 +101,12 @@ export function TopBar({ snap }: { snap: Snapshot }): JSX.Element {
             </span>
           </div>
         </div>
+        <button
+          onClick={onShowInfo}
+          className="label rounded-sm border border-[var(--color-edge2)] px-2 py-1.5 text-[var(--color-dim)] hover:text-[var(--color-text)]"
+        >
+          how it works
+        </button>
         <VolumeControl />
       </div>
     </div>

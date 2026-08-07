@@ -9,14 +9,21 @@
  * is the point of it.
  */
 @theme {
-  --color-pit: #04070a;
-  --color-panel: #080d13;
-  --color-panel2: #0c141c;
-  --color-edge: #16222c;
-  --color-edge2: #24384a;
+  /*
+   * Same hues throughout, lifted in luminance. The palette was sitting a few
+   * points off pure black, which photographs well in a mockup and is grim to
+   * actually sit in for an hour — the surfaces read as absence rather than as
+   * material. These are the identical blue-greys with enough light on them to
+   * look like brushed metal in a room.
+   */
+  --color-pit: #0a1017;
+  --color-panel: #0e1620;
+  --color-panel2: #141f2a;
+  --color-edge: #223343;
+  --color-edge2: #33506a;
 
-  --color-text: #dfeaf2;
-  --color-dim: #5d7386;
+  --color-text: #e6eff6;
+  --color-dim: #7891a6;
 
   /* Rolled zinc */
   --color-zinc: #4a6478;
