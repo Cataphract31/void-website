@@ -7,9 +7,12 @@ import type { CellState } from "@/render/cells";
 export function Shaft({
   snap,
   onSelectCell,
+  topInset = 0,
 }: {
   snap: Snapshot;
   onSelectCell?: (id: number | null) => void;
+  /** Space the lattice must leave clear at the top for the multiplier. */
+  topInset?: number;
 }): JSX.Element {
   const ref = useRef<HTMLCanvasElement>(null);
   const renderer = useRef<LatticeRenderer | null>(null);
@@ -41,8 +44,13 @@ export function Shaft({
   };
 
   useEffect(() => {
+    renderer.current?.setTopInset(topInset);
+  }, [topInset]);
+
+  useEffect(() => {
     const r = renderer.current;
     if (!r) return;
+    r.setTopInset(topInset);
     r.update({
       cells: snap.players.map((p) => ({
         id: p.id,

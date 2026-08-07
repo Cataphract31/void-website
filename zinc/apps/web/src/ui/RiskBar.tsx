@@ -41,8 +41,12 @@ export function RiskBar({ snap, tickMs }: { snap: Snapshot; tickMs: number }): J
 
   return (
     <div className="flex items-center gap-3 rounded-sm border border-[var(--color-edge)] bg-[var(--color-pit)]/80 px-3 py-2 backdrop-blur-sm">
-      <div className="min-w-[92px]">
-        <div className="label leading-tight">shatter risk</div>
+      <div className="min-w-[104px]">
+        <div className="label leading-[1.3]">
+          your shatter
+          <br />
+          risk each tick
+        </div>
         <div
           className="tnum leading-none"
           style={{ fontSize: 24, fontWeight: 700, color }}

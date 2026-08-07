@@ -93,6 +93,13 @@ export class LatticeRenderer {
   private radius = 20;
   private bounds = { x: 0, y: 0, w: 0, h: 0 };
   private sink = { x: 0.5, y: 0.13 };
+  /**
+   * Vertical space kept clear at the top for the multiplier. The number sits
+   * on the same canvas surface as the lattice — sharing its vignette, seam
+   * glow and grain — but the grid packs beneath it so the two never collide.
+   */
+  private topInset = 0;
+  private grain: HTMLCanvasElement | null = null;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext("2d", { alpha: false })!;
@@ -112,6 +119,31 @@ export class LatticeRenderer {
 
   setSinkPoint(x: number, y: number): void {
     this.sink = { x, y };
+  }
+
+  setTopInset(px: number): void {
+    if (Math.abs(px - this.topInset) < 2) return;
+    this.topInset = px;
+    this.layoutKey = "";
+  }
+
+  /** Fine static grain. Costs one blit and stops large flat areas looking bare. */
+  private buildGrain(): HTMLCanvasElement {
+    const size = 180;
+    const c = document.createElement("canvas");
+    c.width = size;
+    c.height = size;
+    const g = c.getContext("2d")!;
+    const img = g.createImageData(size, size);
+    for (let i = 0; i < img.data.length; i += 4) {
+      const v = 128 + (Math.random() - 0.5) * 36;
+      img.data[i] = v;
+      img.data[i + 1] = v;
+      img.data[i + 2] = v;
+      img.data[i + 3] = 12;
+    }
+    g.putImageData(img, 0, 0);
+    return c;
   }
 
   /** Nearest cell to a canvas-space point, if the click landed on one. */
@@ -180,9 +212,10 @@ export class LatticeRenderer {
     }
 
     const padX = this.w * 0.05;
-    const padY = this.h * 0.16;
+    const top = this.topInset + this.h * 0.03;
+    const bottom = this.h * 0.05;
     const availW = this.w - padX * 2;
-    const availH = this.h - padY * 2;
+    const availH = Math.max(40, this.h - top - bottom);
 
     // Shrink until the grid genuinely holds every cell.
     let r = Math.sqrt((availW * availH) / (2.6 * n));
@@ -202,7 +235,7 @@ export class LatticeRenderer {
     const gridW = usedCols * r * 1.5 + r * 0.5;
     const gridH = rows * r * Math.sqrt(3);
     const startX = (this.w - gridW) / 2 + r;
-    const startY = (this.h - gridH) / 2 + (r * Math.sqrt(3)) / 2;
+    const startY = top + (availH - gridH) / 2 + (r * Math.sqrt(3)) / 2;
 
     this.bounds = { x: startX - r * 1.2, y: startY - r, w: gridW + r * 0.4, h: gridH + r };
 
@@ -328,7 +361,20 @@ export class LatticeRenderer {
     this.drawShards(dt);
     if (this.goldWave > 0) this.drawGoldFlood();
     this.drawAtmosphere();
+    this.drawGrain();
 
+    ctx.restore();
+  }
+
+  private drawGrain(): void {
+    if (!this.grain) this.grain = this.buildGrain();
+    const { ctx, w, h } = this;
+    const g = this.grain;
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    for (let x = 0; x < w; x += g.width) {
+      for (let y = 0; y < h; y += g.height) ctx.drawImage(g, x, y);
+    }
     ctx.restore();
   }
 

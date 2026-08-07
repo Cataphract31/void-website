@@ -15,8 +15,20 @@ export default function App(): JSX.Element {
   const client = getGameClient();
   const [snap, setSnap] = useState<Snapshot>(() => client.snapshot());
   const [selected, setSelected] = useState<number | null>(null);
+  const heroRef = useRef<HTMLDivElement>(null);
+  const [heroH, setHeroH] = useState(150);
 
   useEffect(() => client.subscribe(setSnap), [client]);
+
+  // Measure the hero rather than hard-coding a breakpoint, so the lattice
+  // always reserves exactly the space the number actually occupies.
+  useEffect(() => {
+    const el = heroRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setHeroH(el.getBoundingClientRect().height + 10));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Browsers block audio until the first gesture, so arm it on any interaction.
   useEffect(() => {
@@ -38,14 +50,19 @@ export default function App(): JSX.Element {
 
       <div className="mt-1.5 flex min-h-0 flex-1 gap-2 px-1.5 lg:px-3">
         <div className="relative flex min-h-0 flex-1 flex-col">
-          {/* Reserved band. The multiplier lives in its own row rather than
-              floating over the canvas, so it can never overlap the lattice. */}
-          <div className="relative z-10 flex h-[128px] shrink-0 items-center justify-center sm:h-[150px]">
-            <Multiplier snap={snap} />
-          </div>
-
+          {/* One surface. The multiplier sits *on* the canvas so it shares the
+              scene's vignette, seam glow and grain — floating it on the page
+              background made it read as a detached widget. The lattice is told
+              how much room to leave, so they share space without colliding. */}
           <div className="relative min-h-0 flex-1 overflow-hidden rounded-sm border border-[var(--color-edge)]">
-            <Shaft snap={snap} onSelectCell={setSelected} />
+            <Shaft snap={snap} onSelectCell={setSelected} topInset={heroH} />
+
+            <div
+              ref={heroRef}
+              className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center pt-3 sm:pt-5"
+            >
+              <Multiplier snap={snap} />
+            </div>
 
             {snap.phase === "lobby" && (
               <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center">

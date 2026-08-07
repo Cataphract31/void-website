@@ -33,8 +33,14 @@
   /* The only warm element in the whole product */
   --color-gold: #ffb63d;
 
+  /*
+   * Mono for every numeral — tabular figures do not reflow while animating,
+   * and monospaced digits are what financial products are read in. Inter for
+   * everything else: a condensed display face read as sporty and generic,
+   * where this needs to read as trustworthy.
+   */
   --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
-  --font-display: "Barlow Condensed", "Oswald", sans-serif;
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
 :root {
@@ -48,7 +54,9 @@ body,
   margin: 0;
   background: var(--color-pit);
   color: var(--color-text);
-  font-family: var(--font-mono);
+  font-family: var(--font-display);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
 }
@@ -65,14 +73,22 @@ body {
 
 .display {
   font-family: var(--font-display);
-  letter-spacing: 0.04em;
+  letter-spacing: -0.005em;
   text-transform: uppercase;
+  font-weight: 600;
+}
+
+/* Numerals stay monospaced wherever they appear. */
+.tnum,
+.tnum * {
+  font-family: var(--font-mono);
 }
 
 .label {
   font-size: 9.5px;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.13em;
   text-transform: uppercase;
+  font-weight: 500;
   color: var(--color-dim);
 }
 
