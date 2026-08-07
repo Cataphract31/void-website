@@ -10,9 +10,9 @@ import { DevPanel } from "@/ui/DevPanel";
 import { ActionBar, AutoPanel, BonanzaBar, TopBar } from "@/ui/Hud";
 import { InfoOverlay } from "@/ui/Info";
 import { Tutorial, tutorialSeen } from "@/ui/Tutorial";
-import { SlapOverlay } from "@/ui/Meme";
+import { CharSelect, WinnerOverlay } from "@/ui/Chars";
 import { initAudio } from "@/audio/sound";
-import { initMemeAssets } from "@/game/meme";
+import { initCharAssets } from "@/game/chars";
 import { DEFAULT_CONFIG } from "@zinc/engine";
 
 // Read from the engine, not restated. A second copy of the tick interval means
@@ -25,10 +25,11 @@ export default function App(): JSX.Element {
   const [selected, setSelected] = useState<number | null>(null);
   const [showInfo, setShowInfo] = useState(false);
   const [showIntro, setShowIntro] = useState(() => !tutorialSeen());
+  const [showChars, setShowChars] = useState(false);
   const [tab, setTab] = useState<"roster" | "history">("roster");
 
   useEffect(() => client.subscribe(setSnap), [client]);
-  useEffect(() => initMemeAssets(), []);
+  useEffect(() => initCharAssets(), []);
 
   // Browsers block audio until the first gesture, so arm it on any interaction.
   useEffect(() => {
@@ -45,7 +46,11 @@ export default function App(): JSX.Element {
 
   return (
     <div className="mx-auto flex h-full max-w-[1180px] flex-col">
-      <TopBar snap={snap} onShowInfo={() => setShowInfo(true)} />
+      <TopBar
+        snap={snap}
+        onShowInfo={() => setShowInfo(true)}
+        onShowChars={() => setShowChars(true)}
+      />
       <BonanzaBar snap={snap} />
 
       <div className="mt-1.5 flex min-h-0 flex-1 gap-2 px-1.5 lg:px-3">
@@ -112,7 +117,7 @@ export default function App(): JSX.Element {
               </div>
             )}
 
-            <SlapOverlay snap={snap} />
+            <WinnerOverlay snap={snap} />
             <BonanzaOverlay event={snap.bonanza} />
             {import.meta.env.DEV && <DevPanel client={client} snap={snap} />}
           </div>
@@ -161,6 +166,13 @@ export default function App(): JSX.Element {
         />
       )}
       {showIntro && <Tutorial onClose={() => setShowIntro(false)} />}
+      {showChars && (
+        <CharSelect
+          snap={snap}
+          onPick={(id) => client.setCharacter(id)}
+          onClose={() => setShowChars(false)}
+        />
+      )}
 
       {/* Mobile keeps the thumb-reach bottom bar, with auto play just above. */}
       <div className="lg:hidden">

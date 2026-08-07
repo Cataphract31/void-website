@@ -1,5 +1,6 @@
 import { type JSX } from "react";
 import type { GameClient, HistoryEntry, Snapshot } from "@/game/client";
+import { CharArt } from "@/ui/Chars";
 
 /**
  * Your past rounds, each one verifiable.
@@ -36,8 +37,23 @@ export function HistoryPanel({
     );
   }
 
+  const standings = Object.entries(snap.teamWins).sort((a, b) => b[1] - a[1]);
+
   return (
     <div className="scroll-fade h-full overflow-y-auto">
+      {/* Team dominance: all-time round wins per character. Fun data, zero
+          stakes — the teams are cosmetic and every plate rolls the same odds. */}
+      {standings.length > 0 && (
+        <div className="mx-1 mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-sm bg-[var(--color-panel2)] p-1.5">
+          <span className="label">team wins</span>
+          {standings.slice(0, 5).map(([charId, wins]) => (
+            <span key={charId} className="flex items-center gap-1">
+              <CharArt charId={charId} pose="head" size={15} />
+              <span className="tnum text-[10.5px] font-semibold">{wins}</span>
+            </span>
+          ))}
+        </div>
+      )}
       {snap.nextCommit && (
         <div className="mx-1 mt-1 rounded-sm bg-[var(--color-panel2)] p-1.5">
           <span className="label">this round </span>

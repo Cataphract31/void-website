@@ -1,4 +1,5 @@
 import { CellAtlas, hexPath, type CellState } from "./cells";
+import { charById, charImage } from "@/game/chars";
 import { riskScale } from "@/game/risk";
 
 /**
@@ -18,6 +19,8 @@ import { riskScale } from "@/game/risk";
 export interface CellInput {
   id: number;
   state: CellState;
+  /** Which character stands on this plate. */
+  charId: string;
 }
 
 export interface LatticeSnapshot {
@@ -34,6 +37,7 @@ interface Cell {
   x: number;
   y: number;
   state: CellState;
+  charId: string;
   /** Seconds since the state last changed. */
   t: number;
   /** Per-cell phase offset so the lattice never shimmers in unison. */
@@ -206,7 +210,11 @@ export class LatticeRenderer {
     let deaths = 0;
     for (const input of snap.cells) {
       const cell = this.cells.get(input.id);
-      if (!cell || cell.state === input.state) continue;
+      if (!cell) continue;
+      // Kept fresh outside the state diff: switching your character mid-lobby
+      // must repaint your plate without a state transition to hang it on.
+      cell.charId = input.charId;
+      if (cell.state === input.state) continue;
       cell.state = input.state;
       cell.t = 0;
       if (input.state === "dying") {
@@ -247,6 +255,11 @@ export class LatticeRenderer {
     // capacity is a hard requirement.
     const hexH = Math.sqrt(3);
     let r = Math.sqrt((availW * availH) / (2.6 * n));
+    // Tiny fields used to zoom absurdly: with one or two players the capacity
+    // check passes immediately and a lone hex could outgrow the canvas,
+    // overflowing the frame on phones. Cap the radius so a plate always fits
+    // with room to spare, and never grows past reading size regardless of fit.
+    r = Math.min(r, 56, availW / 2.4, availH / (hexH * 1.6));
     let cols = 0;
     let rows = 0;
     for (let guard = 0; guard < 400; guard++) {
@@ -280,6 +293,7 @@ export class LatticeRenderer {
         x,
         y,
         state: input.state,
+        charId: input.charId,
         t: prev?.t ?? 0,
         seed: ((input.id * 2654435761) >>> 0) / 4294967296,
         born: prev?.born ?? 0,
@@ -516,6 +530,30 @@ export class LatticeRenderer {
     ctx.restore();
   }
 
+  /**
+   * The character on a plate: real art once it loads, emoji until then.
+   * Pixel art is blitted with smoothing off so it stays crunchy at any size.
+   */
+  private drawHead(c: Cell, alpha: number, jx: number, jy: number): void {
+    const { ctx } = this;
+    const r = this.radius;
+    const img = charImage(c.charId, "head");
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.96;
+    if (img) {
+      const s = r * 1.15;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, c.x + jx - s / 2, c.y + jy - s / 2, s, s);
+      ctx.imageSmoothingEnabled = true;
+    } else {
+      ctx.font = `${Math.round(r * 0.9)}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(charById(c.charId).emoji, c.x + jx, c.y + jy + r * 0.04);
+    }
+    ctx.restore();
+  }
+
   /** Deterministic per-cell noise, so stress visuals never flicker frame to frame. */
   private static rnd(s: number): number {
     const x = Math.sin(s * 127.1) * 43758.5453;
@@ -627,6 +665,14 @@ export class LatticeRenderer {
       const dw = sprite.w * scale;
       const dh = sprite.h * scale;
       ctx.drawImage(sprite.canvas, c.x - dw / 2 + jx, c.y - dh / 2 + jy + dy, dw, dh);
+
+      // The character standing on the plate. Only while they are actually
+      // standing: a shattered plate has nobody left to draw, and a cashed
+      // ghost cell is the record of a departure. Skipped when plates get too
+      // fine to read a face on.
+      if (inPlay && this.radius >= 11) {
+        this.drawHead(c, alpha, jx, jy + dy);
+      }
 
       // Grace freeze-over: frost sweeps outward from the centre of the lattice
       // and settles over every plate, then lifts as the first real roll lands.

@@ -17,6 +17,7 @@ import {
   type Strategy,
 } from "@zinc/engine";
 import { fakeAddress, shortAddress } from "./names";
+import { CHARACTERS, charById } from "./chars";
 import { riskScale } from "./risk";
 import {
   sfxBonanza,
@@ -51,10 +52,22 @@ export interface PlayerView {
   id: number;
   name: string;
   you: boolean;
+  charId: string;
   outcome: "in" | "cashed" | "dead";
   /** Multiple of the entry paid. 1.00 is break-even. */
   multiple: number;
   balance: number;
+}
+
+/** Who the winner scene celebrates once a round ends. */
+export interface WinnerInfo {
+  name: string;
+  charId: string;
+  you: boolean;
+  multiple: number;
+  amount: number;
+  /** True: outlasted everyone. False: nobody survived, best extraction shown. */
+  lastStanding: boolean;
 }
 
 export interface LogEntry {
@@ -142,6 +155,24 @@ export interface Snapshot {
   revShareTickets: number;
   /** Set for a few seconds after the jackpot fires, then cleared. */
   bonanza: BonanzaEvent | null;
+  /** Your chosen character. */
+  charId: string;
+  /** Set through the result phase, null once the next lobby opens. */
+  winner: WinnerInfo | null;
+  /** All-time wins per character, the team dominance record. */
+  teamWins: Record<string, number>;
+  /** Your standing in both ticket economies, ready to display. */
+  tickets: {
+    /** Bonanza: your tickets over everything circulating since the last fire. */
+    bonYours: number;
+    bonTotal: number;
+    /** Your odds of taking the next fire, 0-1. */
+    bonShare: number;
+    /** Rev share: your slice of the stream as it stands right now, 0-1. */
+    revShare: number;
+    /** Everything the stream has ever paid you. */
+    revStreamed: number;
+  };
   log: LogEntry[];
   /** Finished rounds, newest first, each replayable and verifiable. */
   history: HistoryEntry[];
@@ -175,6 +206,9 @@ interface SaveState {
   revWeight: number;
   autoEnabled?: boolean;
   autoTarget?: number;
+  charId?: string;
+  revStreamed?: number;
+  teamWins?: Record<string, number>;
 }
 
 function loadSave(): SaveState | null {
@@ -211,6 +245,9 @@ export interface HistoryEntry {
   record: RoundRecord;
   immortal: boolean;
   digest: string;
+  /** Who took the round, for the champions strip and the team tally. */
+  winnerChar: string | null;
+  winnerYou: boolean;
 }
 
 export class GameClient {
@@ -254,10 +291,17 @@ export class GameClient {
   /** The real rakeback stream. Your earnings are auto-claimed into the wallet. */
   private revShare: RevShareLedger;
   private rakebackClaimed = 0;
+  /** Everything the stream has ever paid you, across sessions. Display only. */
+  private revStreamedLifetime = 0;
 
   private bonanza: BonanzaEvent | null = null;
   private forceBonanza = false;
   private roundImmortal = false;
+  private winner: WinnerInfo | null = null;
+  private teamWins: Record<string, number> = {};
+  /** Your character. Bots get theirs per lobby in `charMap`. */
+  charId: string = CHARACTERS[0]!.id;
+  private charMap = new Map<number, string>();
   auto: AutoSettings = { enabled: false, target: 2 };
   dev: DevSettings = {
     fieldSize: null,
@@ -286,6 +330,13 @@ export class GameClient {
         this.auto.target = save.autoTarget;
       }
       this.auto.enabled = save.autoEnabled === true;
+      // charById falls back to the default character on any unknown slug.
+      if (save.charId) this.charId = charById(save.charId).id;
+      // Display lifetime only. The claim marker (rakebackClaimed) must NOT be
+      // restored: the ledger's earnings counter restarts at zero each session,
+      // and a restored marker would sit above it, silently blocking claims.
+      this.revStreamedLifetime = save.revStreamed ?? 0;
+      if (save.teamWins) this.teamWins = save.teamWins;
     }
 
     this.openLobby();
@@ -413,11 +464,14 @@ export class GameClient {
     const n = this.dev.fieldSize ?? drawFieldSize(this.config, this.rng.next());
     const now = Date.now();
     this.bonanza = null;
+    this.winner = null;
     this.lobbyEntrants = [];
     this.arrivals.clear();
+    this.charMap.clear();
     for (let i = 0; i < n; i++) {
       // Every player is a wallet, shown ends-only like any on-chain platform.
       this.names.set(i, shortAddress(fakeAddress(() => this.rng.next())));
+      this.charMap.set(i, CHARACTERS[Math.floor(this.rng.next() * CHARACTERS.length)]!.id);
       this.lobbyEntrants.push({
         id: i,
         strategyId: "bot",
@@ -560,7 +614,31 @@ export class GameClient {
         this.wallet += delta;
         this.session += delta;
         this.rakebackClaimed = owed;
+        this.revStreamedLifetime += delta;
         this.say("info", "Rakeback streamed", `+${delta.toFixed(4)} ◎`);
+      }
+
+      // The winner scene's subject: the last one standing, or when the ice
+      // took everyone before a sole survivor emerged, the best extraction.
+      // A total wipe (nobody banked anything) leaves no winner at all.
+      const champ =
+        res.players.find((p) => p.lastStanding) ??
+        [...res.players]
+          .filter((p) => p.outcome === "cashed")
+          .sort((a, b) => b.cashedOut - a.cashedOut)[0];
+      this.winner = champ
+        ? {
+            name: this.names.get(champ.id) ?? "player",
+            charId: this.charOf(champ.id),
+            you: champ.id === YOU_ID,
+            multiple: champ.cashedOut / this.config.entry,
+            amount: champ.cashedOut,
+            lastStanding: champ.lastStanding === true,
+          }
+        : null;
+      if (this.winner) {
+        const t = this.winner.charId;
+        this.teamWins[t] = (this.teamWins[t] ?? 0) + 1;
       }
 
       // The round's fairness record: enough to replay and verify it locally.
@@ -586,6 +664,8 @@ export class GameClient {
         },
         immortal: this.roundImmortal,
         digest: outcomeDigest(res),
+        winnerChar: this.winner?.charId ?? null,
+        winnerYou: this.winner?.you ?? false,
       });
       if (this.history.length > 40) this.history.pop();
     }
@@ -609,6 +689,9 @@ export class GameClient {
         revWeight: this.revShare.weightOf(YOU_ID, now),
         autoEnabled: this.auto.enabled,
         autoTarget: this.auto.target,
+        charId: this.charId,
+        revStreamed: this.revStreamedLifetime,
+        teamWins: this.teamWins,
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(s));
     } catch {
@@ -703,6 +786,12 @@ export class GameClient {
     this.emit();
   }
 
+  setCharacter(id: string): void {
+    this.charId = charById(id).id;
+    this.saveState();
+    this.emit();
+  }
+
   setAuto(patch: Partial<AutoSettings>): void {
     this.auto = { ...this.auto, ...patch };
     if (!Number.isFinite(this.auto.target) || this.auto.target < 1.05) {
@@ -757,11 +846,38 @@ export class GameClient {
     }
   }
 
+  /**
+   * Your standing in both ticket economies. The engine ledgers are the source:
+   * bonanza odds are exactly tickets over the circulating total (wiped each
+   * fire), and the rev-share slice is decayed weight over total decayed weight,
+   * which is precisely the fraction of the next distribution you receive —
+   * whether or not you are in the round it comes from.
+   */
+  private ticketStandings(): Snapshot["tickets"] {
+    const now = Date.now();
+    const bonYours = this.jackpot.ticketsOf(YOU_ID);
+    const bonTotal = this.jackpot.totalTickets;
+    const revTotal = this.revShare.totalWeight(now);
+    return {
+      bonYours,
+      bonTotal,
+      bonShare: bonTotal > 0 ? bonYours / bonTotal : 0,
+      revShare: revTotal > 0 ? this.revShare.weightOf(YOU_ID, now) / revTotal : 0,
+      revStreamed: this.revStreamedLifetime,
+    };
+  }
+
+  /** Yours is read live so a mid-lobby switch shows everywhere instantly. */
+  private charOf(id: number): string {
+    return id === YOU_ID ? this.charId : (this.charMap.get(id) ?? CHARACTERS[0]!.id);
+  }
+
   private viewOf(p: Player): PlayerView {
     return {
       id: p.id,
       name: this.names.get(p.id) ?? "player",
       you: p.id === YOU_ID,
+      charId: this.charOf(p.id),
       outcome: p.outcome,
       multiple: (p.outcome === "in" ? p.balance : p.cashedOut) / this.config.entry,
       balance: p.outcome === "in" ? p.balance : p.cashedOut,
@@ -783,6 +899,7 @@ export class GameClient {
               id: e.id,
               name: this.names.get(e.id) ?? "player",
               you: false,
+              charId: this.charOf(e.id),
               outcome: "in" as const,
               multiple: 1 - totalRake(cfg),
               balance: cfg.entry * (1 - totalRake(cfg)),
@@ -793,6 +910,7 @@ export class GameClient {
                     id: YOU_ID,
                     name: "YOU",
                     you: true,
+                    charId: this.charId,
                     outcome: "in" as const,
                     multiple: 1 - totalRake(cfg),
                     balance: cfg.entry * (1 - totalRake(cfg)),
@@ -851,6 +969,10 @@ export class GameClient {
       bonanzaTickets: this.jackpot.ticketsOf(YOU_ID),
       revShareTickets: this.revShare.lifetimeOf(YOU_ID),
       bonanza: this.bonanza,
+      charId: this.charId,
+      winner: this.winner,
+      teamWins: this.teamWins,
+      tickets: this.ticketStandings(),
       log: this.log,
       history: this.history,
       nextCommit: this.roundCommit,

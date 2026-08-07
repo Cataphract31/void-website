@@ -1,7 +1,7 @@
 import { useRef, type JSX } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { PlayerView, Snapshot } from "@/game/client";
-import { Head } from "@/ui/Meme";
+import { CharHead } from "@/ui/Chars";
 
 /**
  * Who is still in, who got out, who did not. Sorted so the action is on top.
@@ -54,17 +54,7 @@ export function Roster({
               className="absolute left-0 flex w-full cursor-pointer items-center gap-2 px-1 text-[11.5px] hover:bg-[var(--color-panel2)]"
               style={{ height: item.size, transform: `translateY(${item.start}px)` }}
             >
-              {snap.dev.memeMode ? (
-                <Head outcome={p.outcome} />
-              ) : (
-                <span
-                  className="h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{
-                    background: color,
-                    opacity: p.outcome === "in" ? 1 : 0.45,
-                  }}
-                />
-              )}
+              <CharHead charId={p.charId} outcome={p.outcome} />
               <span
                 className="truncate"
                 style={{

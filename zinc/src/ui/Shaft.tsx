@@ -46,6 +46,7 @@ export function Shaft({
     r.update({
       cells: snap.players.map((p) => ({
         id: p.id,
+        charId: p.charId,
         state: (p.outcome === "dead"
           ? "dying"
           : p.outcome === "cashed"

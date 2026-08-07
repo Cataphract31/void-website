@@ -1,6 +1,7 @@
 import { useEffect, useState, type JSX } from "react";
 import type { AutoSettings, Snapshot } from "@/game/client";
 import { shortAddress } from "@/game/names";
+import { CharArt } from "./Chars";
 import {
   getVolume,
   initAudio,
@@ -177,19 +178,23 @@ function Stat({
   );
 }
 
-function Stats({ snap }: { snap: Snapshot }): JSX.Element {
+/**
+ * The tickets stat opens the standings: what your tickets are worth right now
+ * in both economies. This is the demo's showcase that holding pays — the rev
+ * slice streams to you every round whether you entered it or not.
+ */
+function TicketsStat({ snap }: { snap: Snapshot }): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const t = snap.tickets;
+  const pct = (x: number): string =>
+    x > 0 && x < 0.0001 ? "<0.01%" : `${(x * 100).toFixed(2)}%`;
+
   return (
-    <>
-      <Stat label="wallet" value={`${snap.wallet.toFixed(3)} ◎`} color="var(--color-zinc-hi)" />
-      <Stat
-        label="session"
-        value={`${snap.session >= 0 ? "+" : ""}${snap.session.toFixed(3)} ◎`}
-        color={snap.session >= 0 ? "var(--color-profit)" : "var(--color-danger)"}
-      />
-      {/* Rev-share tickets never reset, so they run into five figures fast —
-          grouped, or the number stops being readable. */}
-      <div className="text-right">
+    <div className="relative">
+      <button onClick={() => setOpen((o) => !o)} className="text-right">
         <div className="label">tickets</div>
+        {/* Rev-share tickets never reset, so they run into five figures fast —
+            grouped, or the number stops being readable. */}
         <div className="tnum text-[13px] font-semibold">
           <span className="text-[var(--color-gold)]">
             {snap.bonanzaTickets.toLocaleString()}
@@ -199,7 +204,64 @@ function Stats({ snap }: { snap: Snapshot }): JSX.Element {
             {snap.revShareTickets.toLocaleString()}
           </span>
         </div>
-      </div>
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full z-50 mt-1.5 w-[240px] rounded-md bg-[var(--color-panel2)] p-3 text-left shadow-[0_8px_30px_rgba(0,0,0,0.55)]">
+            <div className="label text-[var(--color-gold)]">bonanza</div>
+            <div className="mt-1 flex items-baseline justify-between">
+              <span className="tnum text-[12px] font-semibold">
+                {t.bonYours.toLocaleString()}
+                <span className="text-[var(--color-dim)]">
+                  {" "}
+                  / {t.bonTotal.toLocaleString()}
+                </span>
+              </span>
+              <span className="tnum text-[12px] font-bold text-[var(--color-gold)]">
+                {pct(t.bonShare)}
+              </span>
+            </div>
+            <div className="mt-1 text-[10.5px] leading-snug text-[var(--color-dim)]">
+              Your odds of taking the whole pool when it fires. Every entry earns
+              tickets, all tickets wipe on a fire.
+            </div>
+
+            <div className="label mt-3 text-[var(--color-cyan)]">rev share</div>
+            <div className="mt-1 flex items-baseline justify-between">
+              <span className="label">your slice</span>
+              <span className="tnum text-[12px] font-bold text-[var(--color-cyan)]">
+                {pct(t.revShare)}
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="label">streamed to you</span>
+              <span className="tnum text-[12px] font-bold text-[var(--color-profit)]">
+                +{t.revStreamed.toFixed(4)} ◎
+              </span>
+            </div>
+            <div className="mt-1 text-[10.5px] leading-snug text-[var(--color-dim)]">
+              2% of every entry streams to ticket holders, paid every round, even
+              rounds you sit out. Newer tickets weigh more.
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Stats({ snap }: { snap: Snapshot }): JSX.Element {
+  return (
+    <>
+      <Stat label="wallet" value={`${snap.wallet.toFixed(3)} ◎`} color="var(--color-zinc-hi)" />
+      <Stat
+        label="session"
+        value={`${snap.session >= 0 ? "+" : ""}${snap.session.toFixed(3)} ◎`}
+        color={snap.session >= 0 ? "var(--color-profit)" : "var(--color-danger)"}
+      />
+      <TicketsStat snap={snap} />
     </>
   );
 }
@@ -212,9 +274,11 @@ function Stats({ snap }: { snap: Snapshot }): JSX.Element {
 export function TopBar({
   snap,
   onShowInfo,
+  onShowChars,
 }: {
   snap: Snapshot;
   onShowInfo: () => void;
+  onShowChars: () => void;
 }): JSX.Element {
   return (
     <div className="px-3 py-2">
@@ -230,6 +294,13 @@ export function TopBar({
         </div>
 
         <div className="flex items-center gap-1 sm:ml-1 max-sm:ml-auto">
+          <button
+            onClick={onShowChars}
+            aria-label="Choose character"
+            className="rounded-md p-1 hover:bg-[var(--color-panel2)]"
+          >
+            <CharArt charId={snap.charId} pose="head" size={22} />
+          </button>
           <WalletButton />
           <IconButton label="How it works" onClick={onShowInfo}>
             ⓘ
