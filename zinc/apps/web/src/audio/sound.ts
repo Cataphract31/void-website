@@ -34,6 +34,8 @@
  * or a paid pack from Soundly / A Sound Effect / Krotos.
  */
 
+import { riskScale } from "../game/risk";
+
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let reverbBus: GainNode | null = null;
@@ -430,19 +432,10 @@ function knock(freq: number, gain: number, wet = 0.18, delay = 0): void {
  */
 const TICK_LEVEL = 0.58;
 
-/** Bottom of the audible scale — the configured hazard floor. */
-const Q_FLOOR = 0.0035;
-/** Top of the scale. Above this everything is already at maximum. */
-const Q_CEIL = 0.08;
-
 export function sfxTick(hazard: number): void {
-  const t = Math.max(
-    0,
-    Math.min(
-      1,
-      Math.log(Math.max(Q_FLOOR, hazard) / Q_FLOOR) / Math.log(Q_CEIL / Q_FLOOR),
-    ),
-  );
+  // Shared with the risk meter. These were two independent hardcoded curves
+  // that had already drifted apart once.
+  const t = riskScale(hazard);
 
   if (sample("tick", (0.22 + t * 0.95) * TICK_LEVEL, 0.06 + t * 0.5, 0.86 + t * 0.3))
     return;

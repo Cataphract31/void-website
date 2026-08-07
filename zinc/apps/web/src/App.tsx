@@ -9,8 +9,11 @@ import { DevPanel } from "@/ui/DevPanel";
 import { ActionBar, BonanzaBar, TopBar } from "@/ui/Hud";
 import { InfoOverlay } from "@/ui/Info";
 import { initAudio } from "@/audio/sound";
+import { DEFAULT_CONFIG } from "@zinc/engine";
 
-const TICK_MS = 500;
+// Read from the engine, not restated. A second copy of the tick interval means
+// the sweep animation silently races the wrong clock the moment timing changes.
+const TICK_MS = DEFAULT_CONFIG.timing.tickMs;
 
 export default function App(): JSX.Element {
   const client = getGameClient();

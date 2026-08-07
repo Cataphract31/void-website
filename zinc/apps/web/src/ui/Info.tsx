@@ -18,6 +18,14 @@ const IN_GAME = 1 - RAKE;
 const RTP = IN_GAME + C.rake.bonanza + C.rake.revShare;
 const pc = (x: number, dp = 0): string => `${(x * 100).toFixed(dp)}%`;
 
+/**
+ * Odds of one specific entry taking the jackpot: the round has to fire, and
+ * you have to be the ticket drawn. Computed at a representative field rather
+ * than stated as a round number, so it cannot quietly disagree with the config.
+ */
+const TYPICAL_FIELD = 26;
+const ONE_IN = Math.round(TYPICAL_FIELD / C.bonanza.fireProb).toLocaleString();
+
 export function InfoOverlay({ onClose }: { onClose: () => void }): JSX.Element {
   useEffect(() => {
     const esc = (e: KeyboardEvent): void => {
@@ -164,8 +172,9 @@ export function InfoOverlay({ onClose }: { onClose: () => void }): JSX.Element {
               ]}
             />
             <p className="text-[var(--color-dim)]">
-              Be clear-eyed about this: a single entry wins it roughly once in
-              39,000. It is the most volatile {pc(C.rake.bonanza)} of your return
+              Be clear-eyed about this: in a field of {TYPICAL_FIELD}, a single
+              entry wins it roughly once in {ONE_IN}. It is the most volatile{" "}
+              {pc(C.rake.bonanza)} of your return
               and most players will never see it. That is exactly why it is{" "}
               {pc(C.rake.bonanza)} and not more.
             </p>

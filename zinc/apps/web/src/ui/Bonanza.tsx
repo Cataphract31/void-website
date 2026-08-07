@@ -9,6 +9,11 @@ import type { BonanzaEvent } from "@/game/client";
  * It gets the loudest treatment in the product: the cold palette is abandoned
  * entirely for warm gold, and the sequence is allowed to interrupt everything.
  */
+/** Intro slam, hold, then lift away. */
+const HOLD = 5.4;
+const FADE = 0.9;
+const DURATION = HOLD + FADE;
+
 export function BonanzaOverlay({ event }: { event: BonanzaEvent | null }): JSX.Element | null {
   const [elapsed, setElapsed] = useState(0);
 
@@ -18,7 +23,12 @@ export function BonanzaOverlay({ event }: { event: BonanzaEvent | null }): JSX.E
     let raf = 0;
     const start = performance.now();
     const loop = (now: number): void => {
-      setElapsed((now - start) / 1000);
+      const t = (now - start) / 1000;
+      setElapsed(t);
+      // Stop once the sequence is over. Previously this kept requesting frames
+      // and setting state at 60Hz until the next lobby cleared the event, long
+      // after the overlay had faded out and stopped rendering anything.
+      if (t > DURATION) return;
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -28,9 +38,8 @@ export function BonanzaOverlay({ event }: { event: BonanzaEvent | null }): JSX.E
   if (!event) return null;
 
   const t = elapsed;
-  // Slam in, hold, then lift away.
   const intro = Math.min(1, t / 0.45);
-  const outro = t > 5.4 ? Math.min(1, (t - 5.4) / 0.9) : 0;
+  const outro = t > HOLD ? Math.min(1, (t - HOLD) / FADE) : 0;
   const alpha = intro * (1 - outro);
   if (alpha <= 0.01) return null;
 

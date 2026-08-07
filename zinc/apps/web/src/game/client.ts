@@ -9,6 +9,7 @@ import {
   type Strategy,
 } from "@zinc/engine";
 import { NAMES, shuffled } from "./names";
+import { riskScale } from "./risk";
 import {
   sfxBonanza,
   sfxExtract,
@@ -198,7 +199,12 @@ export class GameClient {
           ? 1.5 + -Math.log(Math.max(1e-9, this.rng.next())) * 1.0
           : 2.6 + -Math.log(Math.max(1e-9, this.rng.next())) * 3.2;
     const nerve = Math.pow(this.rng.next(), 1.3);
-    const panicAt = 0.055 + this.rng.next() * 0.04;
+    // Expressed on the shared risk scale rather than as a raw rate. As a flat
+    // 5.5-9.5% cutoff this never fired: hazard only exceeds 5.5% for the first
+    // few ticks of a round, which are covered by the grace period and by the
+    // break-even guard below, so the "panics when it gets hot" behaviour was
+    // dead code and every bot was a pure target-exit robot.
+    const panicAt = 0.5 + this.rng.next() * 0.3;
     // Balances are quoted against the post-rake starting stake, so break-even
     // on the entry actually paid sits just above 1. Derived from the config,
     // not hardcoded — this was pinned at 0.07 and would have silently gone
@@ -211,7 +217,7 @@ export class GameClient {
       // And nobody locks in a certain loss out of nerves.
       if (ctx.multiple < breakEven) return false;
       if (ctx.multiple >= target) return true;
-      return ctx.q > panicAt && ctx.rng.next() < nerve * 0.16;
+      return riskScale(ctx.q) > panicAt && ctx.rng.next() < nerve * 0.16;
     };
   }
 

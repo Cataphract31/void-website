@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type JSX } from "react";
 import type { Snapshot } from "@/game/client";
+import { bandColor, bandLabel, riskBand, riskScale } from "@/game/risk";
 
 /**
  * The heartbeat.
@@ -23,21 +24,9 @@ export function RiskBar({ snap, tickMs }: { snap: Snapshot; tickMs: number }): J
   }, [snap.tick]);
 
   const risk = snap.hazard;
-  const color = snap.grace
-    ? "var(--color-cyan)"
-    : risk > 0.055
-      ? "var(--color-danger)"
-      : risk > 0.02
-        ? "var(--color-warn)"
-        : "var(--color-cyan)";
-
-  const label = snap.grace
-    ? "LATTICE HOLDING"
-    : risk > 0.055
-      ? "CRITICAL"
-      : risk > 0.02
-        ? "STRESSED"
-        : "STABLE";
+  const band = riskBand(risk, snap.grace);
+  const color = bandColor(band);
+  const label = bandLabel(band);
 
   return (
     <div className="flex items-center gap-3 rounded-sm border border-[var(--color-edge)] bg-[var(--color-pit)]/80 px-3 py-2 backdrop-blur-sm">
@@ -69,7 +58,10 @@ export function RiskBar({ snap, tickMs }: { snap: Snapshot; tickMs: number }): J
           <div
             className="absolute inset-y-0 left-0 rounded-full opacity-25"
             style={{
-              width: `${Math.min(100, (risk / 0.14) * 100)}%`,
+              // On the shared log scale, not a raw fraction of some assumed
+              // maximum — against a linear 0-14% axis this bar sat under a
+              // fifth full for the entire round.
+              width: `${riskScale(risk) * 100}%`,
               background: color,
             }}
           />
