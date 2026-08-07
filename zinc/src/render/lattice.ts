@@ -1,6 +1,5 @@
 import { CellAtlas, hexPath, type CellState } from "./cells";
 import { TileAtlas, tileVersion, type TileName } from "./tiles";
-import { charById, charImage } from "@/game/chars";
 import { riskScale } from "@/game/risk";
 
 /**
@@ -20,8 +19,6 @@ import { riskScale } from "@/game/risk";
 export interface CellInput {
   id: number;
   state: CellState;
-  /** Which character stands on this plate. */
-  charId: string;
 }
 
 export interface LatticeSnapshot {
@@ -40,7 +37,6 @@ interface Cell {
   x: number;
   y: number;
   state: CellState;
-  charId: string;
   /** Seconds since the state last changed. */
   t: number;
   /** Per-cell phase offset so the lattice never shimmers in unison. */
@@ -232,11 +228,7 @@ export class LatticeRenderer {
     let deaths = 0;
     for (const input of snap.cells) {
       const cell = this.cells.get(input.id);
-      if (!cell) continue;
-      // Kept fresh outside the state diff: switching your character mid-lobby
-      // must repaint your plate without a state transition to hang it on.
-      cell.charId = input.charId;
-      if (cell.state === input.state) continue;
+      if (!cell || cell.state === input.state) continue;
       cell.state = input.state;
       cell.t = 0;
       if (input.state === "dying") {
@@ -333,7 +325,6 @@ export class LatticeRenderer {
         x,
         y,
         state: input.state,
-        charId: input.charId,
         t: prev?.t ?? 0,
         seed: ((input.id * 2654435761) >>> 0) / 4294967296,
         born: prev?.born ?? 0,
@@ -604,40 +595,6 @@ export class LatticeRenderer {
     ctx.restore();
   }
 
-  /**
-   * The character on a plate: real art once it loads, emoji until then.
-   * Pixel art is blitted with smoothing off so it stays crunchy at any size.
-   */
-  private drawHead(c: Cell, alpha: number, jx: number, jy: number, grow: number): void {
-    const { ctx } = this;
-    const r = this.radius;
-    const img = charImage(c.charId, "head");
-    ctx.save();
-    ctx.globalAlpha = alpha * 0.96;
-    if (img) {
-      // Sized as someone STANDING on the plate, not as a portrait pasted over
-      // it. At full-plate size the heads buried the ice art and a crowded
-      // field read as noise; small enough to leave the ice visible, they go
-      // back to doing their actual job, which is making the field feel
-      // populated so an elimination reads as a person and not a cell.
-      const s = r * grow;
-      // Characters sit on pale ice now, so they need to be lifted off it —
-      // a soft contact shadow does that without touching the art itself.
-      ctx.shadowColor = "rgba(4, 14, 24, 0.5)";
-      ctx.shadowBlur = r * 0.22;
-      ctx.shadowOffsetY = r * 0.06;
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(img, c.x + jx - s / 2, c.y + jy - s / 2, s, s);
-      ctx.imageSmoothingEnabled = true;
-    } else {
-      ctx.font = `${Math.round(r * grow * 0.85)}px sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(charById(c.charId).emoji, c.x + jx, c.y + jy + r * 0.04);
-    }
-    ctx.restore();
-  }
-
   /** Deterministic per-cell noise, so stress visuals never flicker frame to frame. */
   private static rnd(s: number): number {
     const x = Math.sin(s * 127.1) * 43758.5453;
@@ -765,17 +722,6 @@ export class LatticeRenderer {
     const midY = b.y + b.h / 2;
     const span = Math.max(b.w, b.h) * 0.6 || 1;
 
-    // A crowd is texture; the last few are individuals. Characters stay small
-    // while the field is packed, so the ice reads as one surface instead of a
-    // wall of faces, and grow as the field empties and each survivor starts
-    // to matter. Same art, opposite feeling, no toggle to get wrong.
-    let standing = 0;
-    for (const c of this.cells.values()) {
-      if (c.state === "live" || c.state === "you") standing++;
-    }
-    const crowd = Math.max(0, Math.min(1, (standing - 4) / 10));
-    const headGrow = 0.82 - 0.24 * crowd;
-
     for (const c of this.cells.values()) {
       c.t += dt;
       if (c.born < 1) c.born = Math.min(1, c.born + dt * 4);
@@ -847,14 +793,6 @@ export class LatticeRenderer {
           );
           ctx.globalAlpha = alpha;
         }
-      }
-
-      // The character standing on the plate. Only while they are actually
-      // standing: a shattered plate has nobody left to draw, and a cashed
-      // ghost cell is the record of a departure. Skipped when plates get too
-      // fine to read a face on.
-      if (inPlay && this.radius >= 16) {
-        this.drawHead(c, alpha, jx, jy + dy, headGrow);
       }
 
       // Grace freeze-over: frost sweeps outward from the centre of the lattice

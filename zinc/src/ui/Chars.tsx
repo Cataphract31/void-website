@@ -12,11 +12,19 @@ export function CharArt({
   pose,
   size,
   dim = false,
+  fill = false,
 }: {
   charId: string;
   pose: Pose;
   size: number;
   dim?: boolean;
+  /**
+   * Fills the parent instead of taking a fixed square. The poses come back
+   * from generation in wildly different shapes — some full body, some
+   * close-up faces — so anywhere space is tight the parent has to own the
+   * bounds and the art has to fit inside them whatever its aspect is.
+   */
+  fill?: boolean;
 }): JSX.Element {
   const def = charById(charId);
   const img = charImage(def.id, pose);
@@ -25,10 +33,13 @@ export function CharArt({
     return (
       <img
         src={img.src}
-        width={size}
-        height={size}
+        {...(fill ? {} : { width: size, height: size })}
         alt={def.label}
-        className="shrink-0 select-none object-contain"
+        className={
+          fill
+            ? "h-full max-h-full w-auto max-w-full select-none object-contain"
+            : "shrink-0 select-none object-contain"
+        }
         style={{
           // Pixel art must scale crunchy, never smoothed into mush.
           imageRendering: "pixelated",
@@ -146,7 +157,10 @@ export function ShatterCard({ snap }: { snap: Snapshot }): JSX.Element | null {
       key={snap.roundId}
       className="win-rise pointer-events-none absolute bottom-2 left-2 z-20 flex items-end gap-1.5"
     >
-      <CharArt charId={snap.charId} pose="lose" size={64} dim />
+      {/* Same rule as the winner: the frame owns the bounds, not the art. */}
+      <div className="h-[64px] max-h-[30%] min-h-[34px]">
+        <CharArt charId={snap.charId} pose="lose" size={64} dim fill />
+      </div>
       <span className="label pb-1 text-[var(--color-danger)]">you shattered</span>
     </div>
   );
@@ -169,16 +183,18 @@ export function WinnerOverlay({ snap }: { snap: Snapshot }): JSX.Element | null 
   return (
     <div
       key={snap.roundId}
-      className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center overflow-hidden"
+      className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center overflow-hidden p-2"
     >
       {/* CRT dressing: darkened lattice, scanlines, one opening flash. */}
       <div className="scanlines absolute inset-0 bg-[var(--color-pit)]/82" />
       <div className="win-flash absolute inset-0 bg-white/70" />
 
       {w ? (
-        <div className="relative flex flex-col items-center">
-          <div className="win-slam">
-            <CharArt charId={w.charId} pose="win" size={168} />
+        <div className="relative flex min-h-0 flex-col items-center">
+          {/* Height is capped as a share of the frame, so the champion scales
+              down with the phone instead of spilling out of the lattice. */}
+          <div className="win-slam h-[168px] max-h-[42%] min-h-[70px] shrink">
+            <CharArt charId={w.charId} pose="win" size={168} fill />
           </div>
           <div
             className="display win-rise mt-3 text-[15px] font-bold tracking-[0.22em]"
@@ -209,7 +225,7 @@ export function WinnerOverlay({ snap }: { snap: Snapshot }): JSX.Element | null 
       )}
 
       {champs.length > 1 && (
-        <div className="win-rise relative mt-6 flex flex-col items-center gap-1.5">
+        <div className="win-rise relative mt-4 flex shrink-0 flex-col items-center gap-1.5">
           <span className="label">recent champions</span>
           <div className="flex items-center gap-1.5">
             {champs.map((h) => (

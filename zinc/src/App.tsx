@@ -150,8 +150,10 @@ export default function App(): JSX.Element {
         </aside>
       </div>
 
-      {/* Mobile panel, given real height now that the feed is gone. */}
-      <div className="mt-1.5 h-[178px] shrink-0 px-1.5 lg:hidden">
+      {/* Mobile panel. Kept deliberately short: on a phone every row of chrome
+          is taken straight out of the lattice, which is the thing people came
+          to look at. The roster scrolls, so height here is a luxury. */}
+      <div className="mt-1.5 h-[124px] shrink-0 px-1.5 lg:hidden">
         <TabbedPanel snap={snap} tab={tab} onTab={setTab}>
           {tab === "roster" ? (
             <Roster snap={snap} onSelect={setSelected} />
@@ -203,7 +205,9 @@ export default function App(): JSX.Element {
  */
 function Footer({ onShowInfo }: { onShowInfo: () => void }): JSX.Element {
   return (
-    <footer className="flex shrink-0 items-center justify-between px-3 py-2">
+    /* Hidden on phones: there the action bar already anchors the bottom of
+       the page, and the footer would only cost the lattice another row. */
+    <footer className="hidden shrink-0 items-center justify-between px-3 py-2 lg:flex">
       <span className="label">
         THIN<span className="text-[var(--color-cyan)]">ICE</span> · a zinc game
       </span>
