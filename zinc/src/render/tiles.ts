@@ -19,6 +19,15 @@ import { hexPath } from "./cells";
 
 export type TileName = "base" | "hairline" | "heavy" | "crack";
 
+/**
+ * A regular hexagon maps exactly onto itself every sixth of a turn, so a plate
+ * can be drawn at any multiple of 60 degrees and still fit its slot perfectly.
+ * That gives six faces out of every one drawn: the ice stops looking stamped
+ * out of a single mould while every plate still carries the identical amount
+ * of damage, which is the part that must never vary between players.
+ */
+export const TILE_TURN = Math.PI / 3;
+
 const NAMES: TileName[] = ["base", "hairline", "heavy", "crack"];
 const images = new Map<TileName, HTMLImageElement>();
 let probed = false;

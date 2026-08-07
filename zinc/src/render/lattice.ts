@@ -1,5 +1,5 @@
 import { CellAtlas, hexPath, type CellState } from "./cells";
-import { TileAtlas, tileVersion, type TileName } from "./tiles";
+import { TILE_TURN, TileAtlas, tileVersion, type TileName } from "./tiles";
 import { riskScale } from "@/game/risk";
 
 /**
@@ -664,11 +664,23 @@ export class LatticeRenderer {
     const dh = tiles.h * scale;
     const x = c.x - dw / 2 + jx;
     const y = c.y - dh / 2 + jy;
+    const R = LatticeRenderer.rnd;
+    // Personality without dishonesty. Each plate gets a fixed sixth-turn and
+    // a hair of tonal drift, so no two look stamped from the same mould —
+    // but the DAMAGE on every plate is identical, because the field shares
+    // one hazard and the ice must never imply otherwise.
+    const turn = Math.floor(R(c.seed * 5.31) * 6) * TILE_TURN;
+    const tone = 0.94 + R(c.seed * 2.77) * 0.06;
+
+    ctx.save();
+    ctx.translate(c.x + jx, c.y + jy);
+    ctx.rotate(turn);
+    ctx.translate(-(c.x + jx), -(c.y + jy));
 
     const blit = (name: TileName, a: number): void => {
       const img = tiles.get(name);
       if (!img || a <= 0.01) return;
-      ctx.globalAlpha = alpha * a;
+      ctx.globalAlpha = alpha * a * tone;
       ctx.drawImage(img, x, y, dw, dh);
     };
 
@@ -680,6 +692,7 @@ export class LatticeRenderer {
       blit(step === 0 ? "base" : "hairline", 1);
       blit(step === 0 ? "hairline" : "heavy", t - step);
     }
+    ctx.restore();
 
     // Every plate is now the same sheet of ice, so "you" has to be marked
     // loudly: a cyan wash, a heavy breathing rim, and a glow that carries

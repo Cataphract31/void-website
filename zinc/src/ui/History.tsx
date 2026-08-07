@@ -19,14 +19,17 @@ export function HistoryPanel({
 }): JSX.Element {
   if (snap.history.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 p-3 text-center">
-        <span className="label">no rounds yet</span>
-        <span className="text-[11px] leading-relaxed text-[var(--color-dim)]">
-          Every round is committed to a sha256 hash before it starts. Finished
-          rounds appear here, and you can replay any of them to check the result.
-        </span>
+      /* Scrollable rather than vertically centred: on a phone this panel is
+         short enough that a centred block simply hangs off both ends, which
+         is why the commitment was arriving half cut off. */
+      <div className="scroll-fade h-full overflow-y-auto px-2 pb-2 pt-3 text-center">
+        <div className="label">no rounds yet</div>
+        <div className="mt-1.5 text-[11px] leading-relaxed text-[var(--color-dim)]">
+          Every round is sealed to a sha256 hash before it starts. Finished
+          rounds land here, and you can replay any of them.
+        </div>
         {snap.nextCommit && (
-          <div className="mt-2 w-full rounded-sm bg-[var(--color-panel2)] p-2 text-left">
+          <div className="mt-2 rounded-sm bg-[var(--color-panel2)] p-2 text-left">
             <div className="label mb-1">next round commitment</div>
             <div className="tnum break-all text-[10px] text-[var(--color-dim)]">
               {snap.nextCommit}
@@ -40,18 +43,23 @@ export function HistoryPanel({
   const standings = Object.entries(snap.teamWins).sort((a, b) => b[1] - a[1]);
 
   return (
-    <div className="scroll-fade h-full overflow-y-auto">
+    /* Padded past the top fade so the first block is never half-swallowed. */
+    <div className="scroll-fade h-full overflow-y-auto pt-2.5">
       {/* Team dominance: all-time round wins per character. Fun data, zero
-          stakes — the teams are cosmetic and every plate rolls the same odds. */}
+          stakes — the teams are cosmetic and every plate rolls the same odds.
+          Label on its own line and the tally centred: as a single wrapping row
+          it broke across two lines in the desktop rail and looked accidental. */}
       {standings.length > 0 && (
-        <div className="mx-1 mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-sm bg-[var(--color-panel2)] p-1.5">
-          <span className="label">team wins</span>
-          {standings.slice(0, 5).map(([charId, wins]) => (
-            <span key={charId} className="flex items-center gap-1">
-              <CharArt charId={charId} pose="head" size={15} />
-              <span className="tnum text-[10.5px] font-semibold">{wins}</span>
-            </span>
-          ))}
+        <div className="mx-1 rounded-sm bg-[var(--color-panel2)] p-1.5">
+          <div className="label mb-1 text-center">team wins</div>
+          <div className="flex items-center justify-center gap-2.5">
+            {standings.slice(0, 5).map(([charId, wins]) => (
+              <span key={charId} className="flex items-center gap-1">
+                <CharArt charId={charId} pose="head" size={15} />
+                <span className="tnum text-[10.5px] font-semibold">{wins}</span>
+              </span>
+            ))}
+          </div>
         </div>
       )}
       {snap.nextCommit && (
