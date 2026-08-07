@@ -144,7 +144,6 @@ function SoundTest(): JSX.Element {
   const cues: [string, string, () => void][] = [
     // Weighted toward 0.5-3%, which is where the hazard actually spends the
     // round. The two high steps only exist to check the opening spike.
-    ["grace", "tick", () => sfxTick(0.075, true)],
     ["0.4%", "tick", () => sfxTick(0.004)],
     ["0.8%", "tick", () => sfxTick(0.008)],
     ["1.5%", "tick", () => sfxTick(0.015)],
@@ -153,8 +152,7 @@ function SoundTest(): JSX.Element {
     ["5%", "tick", () => sfxTick(0.05)],
     ["7.5%", "tick", () => sfxTick(0.075)],
     ["1 plate", "shatter", () => sfxShatter(1)],
-    ["4 plates", "shatter_many", () => sfxShatter(4)],
-    ["15 plates", "shatter_many", () => sfxShatter(15)],
+    ["shatter_many", "shatter_many", () => sfxShatter(4)],
     ["you died", "died", sfxYouDied],
     ["extract", "extract", sfxExtract],
     ["seal", "seal", sfxSeal],

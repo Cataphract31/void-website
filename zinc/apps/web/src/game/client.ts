@@ -300,7 +300,7 @@ export class GameClient {
       this.say("death", `${deaths} shattered`, `${this.currentMultiplier().toFixed(2)}×`);
       sfxShatter(deaths);
     } else {
-      sfxTick(round.hazard, round.currentTick <= this.config.hazard.graceTicks);
+      sfxTick(round.hazard);
     }
     if (youDied) sfxYouDied();
 

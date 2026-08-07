@@ -418,23 +418,24 @@ function knock(freq: number, gain: number, wet = 0.18, delay = 0): void {
  * Past ~3% a soft sub-only ghost beat follows each tick, tightening as risk
  * climbs. See the note on it below: at a 500ms tick a full doubled beat is
  * roughly 240bpm and reads as an alarm rather than as tension.
- *
- * Grace is deliberately its own thing: an airy, pitchless breath with no
- * impact at all, because nothing can hurt you yet and the audio should say so.
  */
+
+/**
+ * Overall level of the tick, independent of every other cue.
+ *
+ * It fires ~120 times a minute, so it sits at a completely different fatigue
+ * budget from sounds you hear once a round. One knob for the whole voice keeps
+ * the risk dynamics intact while scaling the lot — nudge this alone rather
+ * than the individual gains below.
+ */
+const TICK_LEVEL = 0.58;
 
 /** Bottom of the audible scale — the configured hazard floor. */
 const Q_FLOOR = 0.0035;
 /** Top of the scale. Above this everything is already at maximum. */
 const Q_CEIL = 0.08;
 
-export function sfxTick(hazard: number, grace = false): void {
-  if (grace) {
-    if (sample("tick", 0.4, 0.2, 0.85)) return;
-    texture({ dur: 0.12, gain: 0.024, freq: 640, q: 0.8, type: "lowpass", attack: 0.035, wet: 0.32 });
-    return;
-  }
-
+export function sfxTick(hazard: number): void {
   const t = Math.max(
     0,
     Math.min(
@@ -443,7 +444,8 @@ export function sfxTick(hazard: number, grace = false): void {
     ),
   );
 
-  if (sample("tick", 0.22 + t * 0.95, 0.06 + t * 0.5, 0.86 + t * 0.3)) return;
+  if (sample("tick", (0.22 + t * 0.95) * TICK_LEVEL, 0.06 + t * 0.5, 0.86 + t * 0.3))
+    return;
 
   // Shaped curves so the middle of the range keeps moving rather than
   // saturating: brightness and length lead, weight lags.
@@ -458,7 +460,7 @@ export function sfxTick(hazard: number, grace = false): void {
     // Switching type is far more noticeable than any amount of tweening.
     texture({
       dur,
-      gain: (0.016 + lead * 0.082) * level,
+      gain: (0.016 + lead * 0.082) * level * TICK_LEVEL,
       freq: 240 + lead * 1160,
       q: t < 0.28 ? 0.8 : 1.3 + lead * 3.4,
       type: t < 0.28 ? "lowpass" : "bandpass",
@@ -472,7 +474,7 @@ export function sfxTick(hazard: number, grace = false): void {
       freq: 68 + lead * 82,
       glideTo: 52 + lead * 30,
       dur: dur * 1.5,
-      gain: (0.022 + lead * 0.062) * level,
+      gain: (0.022 + lead * 0.062) * level * TICK_LEVEL,
       attack: 0.002,
       wet: wet * 0.7,
       delay,
@@ -485,7 +487,7 @@ export function sfxTick(hazard: number, grace = false): void {
         freq: 60,
         glideTo: 36,
         dur: 0.15 + w * 0.28,
-        gain: 0.055 * w * level,
+        gain: 0.055 * w * level * TICK_LEVEL,
         attack: 0.006,
         wet: 0.2 + w * 0.2,
         delay,
@@ -499,7 +501,7 @@ export function sfxTick(hazard: number, grace = false): void {
       const b = (t - 0.62) / 0.38;
       texture({
         dur: 0.016,
-        gain: 0.016 * b * level,
+        gain: 0.016 * b * level * TICK_LEVEL,
         freq: 2400 + b * 1200,
         q: 1.1,
         attack: 0.001,
@@ -533,7 +535,7 @@ export function sfxTick(hazard: number, grace = false): void {
       freq: 58,
       glideTo: 38,
       dur: 0.13 + h * 0.09,
-      gain: 0.028 + h * 0.022,
+      gain: (0.028 + h * 0.022) * TICK_LEVEL,
       attack: 0.008,
       wet: 0.22,
       delay: 0.16 - h * 0.045,
