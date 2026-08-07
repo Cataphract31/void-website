@@ -157,7 +157,7 @@ export function WinnerOverlay({ snap }: { snap: Snapshot }): JSX.Element | null 
       {w ? (
         <div className="relative flex flex-col items-center">
           <div className="win-slam">
-            <CharArt charId={w.charId} pose="win" size={104} />
+            <CharArt charId={w.charId} pose="win" size={168} />
           </div>
           <div
             className="display win-rise mt-3 text-[15px] font-bold tracking-[0.22em]"

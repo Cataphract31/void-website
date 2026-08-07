@@ -1,4 +1,5 @@
 import { CellAtlas, hexPath, type CellState } from "./cells";
+import { TileAtlas, tileVersion, type TileName } from "./tiles";
 import { charById, charImage } from "@/game/chars";
 import { riskScale } from "@/game/risk";
 
@@ -81,6 +82,7 @@ function seamColor(t: number): [number, number, number] {
 export class LatticeRenderer {
   private ctx: CanvasRenderingContext2D;
   private atlas: CellAtlas | null = null;
+  private tiles: TileAtlas | null = null;
   private cells = new Map<number, Cell>();
   private shards: Shard[] = [];
   private w = 0;
@@ -273,6 +275,7 @@ export class LatticeRenderer {
     r = Math.max(1.5, r);
     this.radius = r;
     this.atlas = new CellAtlas(r, this.dpr);
+    this.tiles = new TileAtlas(r, this.dpr);
 
     // Shape the occupied block to the canvas, not to whatever the capacity
     // grid happens to be. Since the radius cap landed, a half-full desktop
@@ -621,10 +624,63 @@ export class LatticeRenderer {
     ctx.restore();
   }
 
+  /**
+   * The plate face for the current stress, cross-faded so the ice degrades
+   * continuously instead of snapping between the four drawn stages. A plate
+   * that is breaking jumps straight to the shattered face.
+   */
+  private drawTileFace(
+    c: Cell,
+    tiles: TileAtlas,
+    stress: number,
+    alpha: number,
+    scale: number,
+    jx: number,
+    jy: number,
+  ): void {
+    const { ctx } = this;
+    const dw = tiles.w * scale;
+    const dh = tiles.h * scale;
+    const x = c.x - dw / 2 + jx;
+    const y = c.y - dh / 2 + jy;
+
+    const blit = (name: TileName, a: number): void => {
+      const img = tiles.get(name);
+      if (!img || a <= 0.01) return;
+      ctx.globalAlpha = alpha * a;
+      ctx.drawImage(img, x, y, dw, dh);
+    };
+
+    if (c.state === "dying") {
+      blit("crack", 1);
+    } else {
+      const t = stress * 2;
+      const step = Math.min(1, Math.floor(t));
+      blit(step === 0 ? "base" : "hairline", 1);
+      blit(step === 0 ? "hairline" : "heavy", t - step);
+    }
+
+    // The art is one material, so "you" needs its own mark on top of it.
+    if (c.state === "you") {
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = "#3fe0d8";
+      ctx.lineWidth = Math.max(1, this.radius * 0.075);
+      hexPath(ctx, c.x + jx, c.y + jy, this.radius * scale * 0.97);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = alpha;
+  }
+
   private drawCells(dt: number): void {
     const { ctx } = this;
     const atlas = this.atlas;
     if (!atlas) return;
+    // The faces decode after the first layout is already on screen, so the
+    // atlas rebakes itself once whenever more art has arrived.
+    if (this.tiles && this.tiles.version !== tileVersion && this.radius > 0) {
+      this.tiles = new TileAtlas(this.radius, this.dpr);
+    }
+    const tiles = this.tiles?.usable ? this.tiles : null;
 
     // Material stress on the perceptual scale: first hairlines below 2%
     // hazard, half the field visibly cracked by ~3%, violent from 5% up. The
@@ -683,6 +739,13 @@ export class LatticeRenderer {
       const dh = sprite.h * scale;
       ctx.drawImage(sprite.canvas, c.x - dw / 2 + jx, c.y - dh / 2 + jy + dy, dw, dh);
 
+      // The drawn plate face, laid over the procedural one so its glow and
+      // rim still frame the plate. Everyone shows the same stage of failure:
+      // the field shares one hazard, so it must read as one sheet of ice.
+      if (tiles && (inPlay || c.state === "dying")) {
+        this.drawTileFace(c, tiles, stress, alpha, scale, jx, jy + dy);
+      }
+
       // The character standing on the plate. Only while they are actually
       // standing: a shattered plate has nobody left to draw, and a cashed
       // ghost cell is the record of a departure. Skipped when plates get too
@@ -705,7 +768,10 @@ export class LatticeRenderer {
         }
       }
 
-      if (stress > 0.03 && inPlay && this.radius > 6) {
+      // Procedural fractures are the fallback only: when the drawn faces are
+      // present they carry the whole cracking gradient, and running both
+      // scribbles a second set of cracks over the art.
+      if (!tiles && stress > 0.03 && inPlay && this.radius > 6) {
         this.drawStress(c, stress, jx, jy);
       }
 

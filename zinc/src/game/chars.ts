@@ -27,12 +27,12 @@ export interface CharacterDef {
 
 export const CHARACTERS: CharacterDef[] = [
   { id: "chad", label: "CHAD", emoji: "\u{1F5FF}", hue: 205 },
-  { id: "cuck", label: "CUCK", emoji: "\u{1F633}", hue: 330 },
+  { id: "soyjak", label: "SOYJAK", emoji: "\u{1F62E}", hue: 330 },
   { id: "wojak", label: "WOJAK", emoji: "\u{1F610}", hue: 0 },
   { id: "ansem", label: "ANSEM", emoji: "\u{1F98D}", hue: 275 },
   { id: "saylor", label: "SAYLOR", emoji: "\u{1F574}\u{FE0F}", hue: 30 },
   { id: "pepe", label: "PEPE", emoji: "\u{1F438}", hue: 110 },
-  { id: "wif", label: "WIF", emoji: "\u{1F436}", hue: 45 },
+  { id: "chud", label: "CHUD", emoji: "\u{1F621}", hue: 15 },
   { id: "bogdanoff", label: "BOGDANOFF", emoji: "\u{1F4DE}", hue: 185 },
 ];
 

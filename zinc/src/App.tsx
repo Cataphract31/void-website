@@ -13,6 +13,7 @@ import { Tutorial, tutorialSeen } from "@/ui/Tutorial";
 import { CharSelect, WinnerOverlay } from "@/ui/Chars";
 import { initAudio } from "@/audio/sound";
 import { initCharAssets } from "@/game/chars";
+import { initTileAssets } from "@/render/tiles";
 import { DEFAULT_CONFIG } from "@zinc/engine";
 
 // Read from the engine, not restated. A second copy of the tick interval means
@@ -29,7 +30,10 @@ export default function App(): JSX.Element {
   const [tab, setTab] = useState<"roster" | "history">("roster");
 
   useEffect(() => client.subscribe(setSnap), [client]);
-  useEffect(() => initCharAssets(), []);
+  useEffect(() => {
+    initCharAssets();
+    initTileAssets();
+  }, []);
 
   // Browsers block audio until the first gesture, so arm it on any interaction.
   useEffect(() => {
