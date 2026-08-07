@@ -257,9 +257,11 @@ export class LatticeRenderer {
     let r = Math.sqrt((availW * availH) / (2.6 * n));
     // Tiny fields used to zoom absurdly: with one or two players the capacity
     // check passes immediately and a lone hex could outgrow the canvas,
-    // overflowing the frame on phones. Cap the radius so a plate always fits
-    // with room to spare, and never grows past reading size regardless of fit.
-    r = Math.min(r, 56, availW / 2.4, availH / (hexH * 1.6));
+    // overflowing the frame on phones. The ceiling has to scale with the
+    // viewport, not be a fixed pixel count — a flat cap sized for a phone
+    // shrinks a full desktop field to a third of the space it should own.
+    const roomy = Math.max(70, Math.min(availW, availH) * 0.16);
+    r = Math.min(r, roomy, availW / 2.4, availH / (hexH * 1.6));
     let cols = 0;
     let rows = 0;
     for (let guard = 0; guard < 400; guard++) {
