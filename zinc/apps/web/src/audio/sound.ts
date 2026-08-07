@@ -1,22 +1,37 @@
 /**
  * Audio.
  *
- * An earlier version was square-wave oscillators and raw white noise, which is
- * the precise recipe for 8-bit — hard transients, no space, no body. This one
- * is built the way sound design actually works:
+ * Two rules came out of playtesting, and they drive everything here.
  *
- *   transient + body + tail, through a shared reverb.
+ * 1. NO TONES. Bells, chimes and pitched "blings" are what made the last pass
+ *    feel like a toy. Nothing in this file plays a melody or a chord you could
+ *    hum, with the single exception of the jackpot, which earns it. Everything
+ *    else is material: noise driven through resonant filters, plus sub. That
+ *    is how real impact design works — you are meant to hear an object, not a
+ *    synthesiser.
  *
- * Everything runs through a convolution reverb built from a procedurally
- * generated impulse response, so sounds occupy a room rather than firing dry
- * at the listener. Voices are sine and triangle stacks with slight inharmonic
- * detuning — that is what reads as struck metal or glass rather than a beep.
- * Attacks are shaped in milliseconds instead of starting instantaneously,
- * which is most of the difference between "premium" and "cheap".
+ * 2. A MASS SHATTER IS MANY THINGS, NOT ONE BIG THING. Making a wipe louder
+ *    sounded like a machine gun; making it deeper sounded like a bad movie
+ *    trailer. Twenty plates going at once is a rockfall — a spread of small
+ *    cracks, staggered by a few milliseconds each, over one shared low body.
+ *    So `sfxShatter` scales in *density*, holding pitch and level roughly
+ *    fixed.
  *
- * Crucially, a mass shatter does not get louder. It gets *deeper* — more sub,
- * more reverb, darker filtering, fewer bright partials — so a big collapse
- * sounds like distance and mass instead of a louder pop.
+ * Everything runs through a convolution reverb built from a generated impulse
+ * response, so sounds sit in a room instead of firing dry at the listener.
+ *
+ * ── Using real recorded samples instead ──────────────────────────────────
+ * Synthesis is the fallback, not the ceiling. Drop audio files into
+ * `apps/web/public/sfx/` and they are used automatically in place of the
+ * synthesised voice, no code change:
+ *
+ *     tick.mp3  shatter.mp3  shatter_many.mp3  extract.mp3
+ *     died.mp3  seal.mp3     join.mp3          bonanza.mp3
+ *
+ * (.mp3, .wav or .ogg — the loader tries each.) Anything missing keeps its
+ * synthesised version, so the pack can be filled in one sound at a time.
+ * Sources that are free for commercial use: freesound.org filtered to CC0,
+ * or a paid pack from Soundly / A Sound Effect / Krotos.
  */
 
 let ctx: AudioContext | null = null;
@@ -27,10 +42,69 @@ let muted = false;
 const STORAGE_KEY = "zinc.muted";
 const VOLUME = 0.8;
 
+/* ── Optional sample pack ───────────────────────────────────────────────── */
+
+const SAMPLE_NAMES = [
+  "tick",
+  "shatter",
+  "shatter_many",
+  "extract",
+  "died",
+  "seal",
+  "join",
+  "bonanza",
+] as const;
+type SampleName = (typeof SAMPLE_NAMES)[number];
+
+const samples = new Map<SampleName, AudioBuffer>();
+
+/**
+ * Tries each container for each name. A miss is completely normal — the file
+ * simply isn't in the pack — so failures are silent and leave the synthesised
+ * voice in place.
+ */
+async function loadSamplePack(ac: AudioContext): Promise<void> {
+  const base = import.meta.env.BASE_URL || "/";
+  await Promise.all(
+    SAMPLE_NAMES.map(async (name) => {
+      for (const ext of ["mp3", "wav", "ogg"]) {
+        try {
+          const res = await fetch(`${base}sfx/${name}.${ext}`);
+          if (!res.ok) continue;
+          const bytes = await res.arrayBuffer();
+          // A static host that falls back to index.html will hand us HTML with
+          // a 200, so decoding is the real test of whether a sample exists.
+          if (bytes.byteLength < 512) continue;
+          samples.set(name, await ac.decodeAudioData(bytes));
+          return;
+        } catch {
+          /* next extension */
+        }
+      }
+    }),
+  );
+}
+
+/** Plays a pack sample if one was found. Returns false to fall through to synthesis. */
+function sample(name: SampleName, gain = 1, wet = 0.25, rate = 1): boolean {
+  const buf = samples.get(name);
+  if (!buf || !ctx || !master || muted) return false;
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.playbackRate.value = rate;
+  const g = ctx.createGain();
+  g.gain.value = gain;
+  src.connect(g);
+  connectVoice(g, wet);
+  src.start();
+  return true;
+}
+
+/* ── Engine ─────────────────────────────────────────────────────────────── */
+
 /**
  * Impulse response: exponentially decaying noise, slightly different per
- * channel for width, with an early lowpass so the tail is dark rather than
- * hissy.
+ * channel for width, one-pole lowpassed so the tail is dark rather than hissy.
  */
 function buildImpulse(ac: AudioContext, seconds: number, decay: number): AudioBuffer {
   const rate = ac.sampleRate;
@@ -42,7 +116,6 @@ function buildImpulse(ac: AudioContext, seconds: number, decay: number): AudioBu
     for (let i = 0; i < len; i++) {
       const t = i / len;
       const n = Math.random() * 2 - 1;
-      // One-pole lowpass keeps the tail warm.
       lp += (n - lp) * 0.28;
       data[i] = lp * Math.pow(1 - t, decay);
     }
@@ -61,8 +134,7 @@ export function initAudio(): void {
       (window as never as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     const ac = new Ctor();
 
-    // Master chain: gentle glue compression, then a ceiling so a mass shatter
-    // can never clip.
+    // Glue compression, then a ceiling so a mass shatter can never clip.
     const comp = ac.createDynamicsCompressor();
     comp.threshold.value = -18;
     comp.knee.value = 26;
@@ -72,7 +144,6 @@ export function initAudio(): void {
 
     const out = ac.createGain();
     out.gain.value = muted ? 0 : VOLUME;
-
     out.connect(comp);
     comp.connect(ac.destination);
 
@@ -80,7 +151,6 @@ export function initAudio(): void {
     conv.buffer = buildImpulse(ac, 2.6, 2.4);
     const send = ac.createGain();
     send.gain.value = 1;
-    // Tame the reverb's top end so tails stay velvety.
     const damp = ac.createBiquadFilter();
     damp.type = "lowpass";
     damp.frequency.value = 4200;
@@ -91,6 +161,8 @@ export function initAudio(): void {
     ctx = ac;
     master = out;
     reverbBus = send;
+
+    void loadSamplePack(ac);
   } catch {
     ctx = null;
   }
@@ -119,7 +191,7 @@ export function isMuted(): boolean {
   return muted;
 }
 
-/** Routes a voice to dry and reverb paths. */
+/** Routes a voice to the dry output and, optionally, the reverb send. */
 function connectVoice(node: AudioNode, wet: number): void {
   if (!ctx || !master || !reverbBus) return;
   node.connect(master);
@@ -131,37 +203,35 @@ function connectVoice(node: AudioNode, wet: number): void {
   }
 }
 
-interface PartialOpts {
+interface SubOpts {
   freq: number;
   dur: number;
   gain: number;
-  type?: OscillatorType;
   attack?: number;
-  detune?: number;
   wet?: number;
   delay?: number;
   glideTo?: number;
 }
 
-/** One shaped partial. Soft attack, exponential tail. */
-function partial({
+/**
+ * Sub-bass weight. Sine only, and kept below ~200Hz — the moment this reaches
+ * into the midrange it stops being felt and starts being a note.
+ */
+function sub({
   freq,
   dur,
   gain,
-  type = "sine",
   attack = 0.008,
-  detune = 0,
-  wet = 0.25,
+  wet = 0.2,
   delay = 0,
   glideTo,
-}: PartialOpts): void {
+}: SubOpts): void {
   if (!ctx || !master || muted) return;
   const t0 = ctx.currentTime + delay;
   const osc = ctx.createOscillator();
-  osc.type = type;
+  osc.type = "sine";
   osc.frequency.setValueAtTime(freq, t0);
-  if (glideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(20, glideTo), t0 + dur);
-  osc.detune.value = detune;
+  if (glideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(18, glideTo), t0 + dur);
 
   const g = ctx.createGain();
   g.gain.setValueAtTime(0.0001, t0);
@@ -186,7 +256,7 @@ interface TextureOpts {
   delay?: number;
 }
 
-/** Resonant filtered noise — the material texture, never raw white noise. */
+/** Resonant filtered noise. The material itself — never raw white noise. */
 function texture({
   dur,
   gain,
@@ -230,179 +300,198 @@ function texture({
   src.stop(t0 + dur + 0.02);
 }
 
-/**
- * Struck-metal bell. Inharmonic ratios rather than a clean harmonic series —
- * real struck objects are inharmonic, and faking that is what stops a tone
- * sounding synthetic.
- */
-function bell(root: number, dur: number, gain: number, wet = 0.5, delay = 0): void {
-  const ratios = [1, 2.01, 2.99, 4.21, 5.43];
-  const levels = [1, 0.5, 0.3, 0.16, 0.09];
-  ratios.forEach((r, i) => {
-    partial({
-      freq: root * r,
-      dur: dur * (1 - i * 0.13),
-      gain: gain * levels[i]!,
-      attack: 0.006 + i * 0.002,
-      detune: (i % 2 ? 4 : -4) * (i + 1),
-      wet,
-      delay,
-    });
-  });
+/** One dry, woody knock. Short enough to read as an impact, not a pitch. */
+function knock(freq: number, gain: number, wet = 0.18, delay = 0): void {
+  texture({ dur: 0.045, gain, freq, q: 2.4, wet, delay });
+  sub({ freq, glideTo: freq * 0.55, dur: 0.1, gain: gain * 0.8, attack: 0.002, wet, delay });
 }
 
+/* ── Cues ───────────────────────────────────────────────────────────────── */
+
 /**
- * The metronome. Deliberately soft and low — it repeats every half second, so
- * anything sharp becomes torture within a minute. Rising risk opens it up
- * slightly rather than making it shriller.
+ * The metronome. It fires every half second, so it has to be almost
+ * subliminal — anything with an edge becomes torture inside a minute. Rising
+ * risk firms it up rather than raising its pitch.
  */
 export function sfxTick(hazard: number): void {
   const t = Math.min(1, hazard / 0.13);
-  partial({
-    freq: 132 + t * 46,
-    dur: 0.075,
-    gain: 0.05 + t * 0.045,
-    type: "sine",
-    attack: 0.003,
-    wet: 0.18,
-  });
+  if (sample("tick", 0.5 + t * 0.3, 0.12)) return;
   texture({
-    dur: 0.03,
-    gain: 0.014 + t * 0.02,
-    freq: 2400 + t * 900,
+    dur: 0.032,
+    gain: 0.05 + t * 0.05,
+    freq: 380 + t * 190,
+    q: 1.8,
+    wet: 0.14,
+  });
+  sub({ freq: 96, dur: 0.07, gain: 0.05 + t * 0.03, attack: 0.002, wet: 0.1 });
+}
+
+/**
+ * Plates shattering — a rockfall, not an explosion.
+ *
+ * The count changes how *many* cracks you hear and how far they smear across
+ * time, not how loud or how low the whole thing is. Pitch and level are held
+ * near constant on purpose: one plate and fifteen plates should sound like the
+ * same material, in the same room, at different scales of event.
+ */
+export function sfxShatter(count: number): void {
+  const n = Math.max(1, Math.min(7, Math.round(Math.sqrt(count) * 1.6)));
+  if (sample(count > 3 ? "shatter_many" : "shatter", 0.85, 0.3)) return;
+
+  // The grains. Each is a separate small fracture, jittered so they never line
+  // up into a single machine-gun transient.
+  for (let i = 0; i < n; i++) {
+    const delay = i === 0 ? 0 : 0.012 + Math.random() * 0.1;
+    const f = 900 + Math.random() * 1500;
+    texture({
+      dur: 0.035 + Math.random() * 0.05,
+      // Later grains sit further back, so the cascade has depth.
+      gain: (0.075 / (1 + i * 0.45)) * (0.8 + Math.random() * 0.4),
+      freq: f,
+      q: 2.2,
+      sweepTo: f * 0.45,
+      wet: 0.25 + i * 0.06,
+      delay,
+    });
+  }
+
+  // One shared body under the whole cascade. Grows sub-linearly, and never
+  // drops in pitch with size — mass reads as spread, not as depth.
+  const heft = Math.min(1, count / 10);
+  texture({
+    dur: 0.2 + heft * 0.22,
+    gain: 0.07 + heft * 0.045,
+    freq: 420,
+    sweepTo: 150,
     q: 0.9,
-    type: "lowpass",
-    wet: 0.12,
+    wet: 0.32 + heft * 0.2,
+    delay: 0.01,
+  });
+  sub({
+    freq: 68,
+    glideTo: 40,
+    dur: 0.3 + heft * 0.22,
+    gain: 0.13 + heft * 0.07,
+    attack: 0.01,
+    wet: 0.18,
   });
 }
 
 /**
- * Plates shattering. More at once means bigger and deeper, not louder — the
- * body darkens, the sub grows, and more of it goes to the reverb, so a wipe
- * reads as mass and distance.
+ * You got out. A pressure release, not a reward jingle — air escaping a seal,
+ * settling onto a soft floor. Relief reads better than congratulation, and it
+ * does not get grating on the two-hundredth time.
  */
-export function sfxShatter(count: number): void {
-  const heft = Math.min(1, count / 9);
-
-  // Transient: the crack itself.
-  texture({
-    dur: 0.06,
-    gain: 0.12 - heft * 0.03,
-    freq: 2100 - heft * 700,
-    q: 1.6,
-    wet: 0.2,
-  });
-
-  // Body: darker and longer as more goes at once.
-  texture({
-    dur: 0.28 + heft * 0.4,
-    gain: 0.1 + heft * 0.1,
-    freq: 760 - heft * 380,
-    sweepTo: 190 - heft * 90,
-    q: 1.1,
-    wet: 0.35 + heft * 0.4,
-    delay: 0.012,
-  });
-
-  // Sub: the weight.
-  partial({
-    freq: 74 - heft * 18,
-    glideTo: 34,
-    dur: 0.45 + heft * 0.5,
-    gain: 0.16 + heft * 0.16,
-    type: "sine",
-    attack: 0.012,
-    wet: 0.2,
-  });
-
-  // Crystalline ring-off. Fewer, quieter partials when many break at once —
-  // an individual plate rings, an avalanche does not.
-  const rings = Math.max(1, 3 - Math.round(heft * 2));
-  for (let i = 0; i < rings; i++) {
-    partial({
-      freq: 1500 + Math.random() * 1900,
-      dur: 0.5 + Math.random() * 0.6,
-      gain: (0.035 - heft * 0.02) * (1 - i * 0.25),
-      type: "triangle",
-      attack: 0.004,
-      detune: (Math.random() - 0.5) * 26,
-      wet: 0.75,
-      delay: 0.01 + i * 0.025,
-    });
-  }
-}
-
-/** You got out. A clean, warm two-note bell — the sound of relief. */
 export function sfxExtract(): void {
-  bell(784, 0.85, 0.15, 0.55);
-  bell(1176, 0.7, 0.09, 0.6, 0.075);
-}
-
-/** Your plate went. Deep, dark, and final. */
-export function sfxYouDied(): void {
-  partial({
-    freq: 96,
-    glideTo: 28,
-    dur: 1.3,
-    gain: 0.3,
-    type: "sine",
-    attack: 0.006,
+  if (sample("extract", 0.9, 0.4)) return;
+  // Air venting.
+  texture({
+    dur: 0.34,
+    gain: 0.075,
+    freq: 2600,
+    sweepTo: 620,
+    q: 0.7,
+    type: "lowpass",
+    attack: 0.012,
     wet: 0.45,
   });
+  // The floor it lands on.
+  sub({ freq: 116, glideTo: 88, dur: 0.5, gain: 0.16, attack: 0.02, wet: 0.35 });
+  knock(300, 0.05, 0.3, 0.03);
+}
+
+/** Your plate went. Dark, close, final. */
+export function sfxYouDied(): void {
+  if (sample("died", 1, 0.5)) return;
+  sub({ freq: 92, glideTo: 26, dur: 1.25, gain: 0.3, attack: 0.005, wet: 0.45 });
+  texture({ dur: 0.5, gain: 0.15, freq: 1500, sweepTo: 160, q: 1.1, wet: 0.55 });
   texture({
-    dur: 0.85,
-    gain: 0.16,
-    freq: 900,
-    sweepTo: 130,
-    q: 0.9,
-    wet: 0.6,
-  });
-  partial({
-    freq: 148,
-    glideTo: 74,
-    dur: 0.7,
-    gain: 0.1,
-    type: "triangle",
-    attack: 0.01,
-    wet: 0.5,
+    dur: 0.9,
+    gain: 0.06,
+    freq: 300,
+    sweepTo: 90,
+    q: 0.6,
+    type: "lowpass",
+    attack: 0.05,
+    wet: 0.7,
+    delay: 0.08,
   });
 }
 
 /** The lattice sealing. Low, solid, a door closing. */
 export function sfxSeal(): void {
-  partial({ freq: 132, glideTo: 58, dur: 0.5, gain: 0.18, type: "sine", attack: 0.012, wet: 0.4 });
-  texture({ dur: 0.22, gain: 0.07, freq: 520, sweepTo: 180, q: 1, wet: 0.35 });
+  if (sample("seal", 0.9, 0.4)) return;
+  sub({ freq: 128, glideTo: 54, dur: 0.5, gain: 0.19, attack: 0.01, wet: 0.4 });
+  texture({ dur: 0.19, gain: 0.07, freq: 520, sweepTo: 170, q: 1.1, wet: 0.35 });
 }
 
-/** You bonded in. Quiet, affirmative. */
+/** You bonded in. A single quiet, low confirmation. */
 export function sfxJoin(): void {
-  bell(523, 0.5, 0.09, 0.4);
+  if (sample("join", 0.8, 0.25)) return;
+  knock(210, 0.09, 0.28);
+  sub({ freq: 140, dur: 0.22, gain: 0.07, attack: 0.014, wet: 0.3 });
 }
 
 /**
- * The jackpot. A rising major swell with a sub floor and a long shimmer —
- * the only moment the product is allowed to sound warm.
+ * The jackpot — the one moment allowed to be musical.
+ *
+ * Structure is the standard three-part celebration cue: a riser that builds
+ * anticipation, an impact that lands it, then a warm sustained pad that hangs
+ * in the reverb while the overlay plays. The pad is a filtered saw stack, not
+ * bells: an open fifth with the octave above it, lowpassed so it stays warm
+ * and never turns into a sparkle.
  */
 export function sfxBonanza(): void {
-  // Root movement: I - V - octave, each a full inharmonic bell stack.
-  bell(392, 2.4, 0.17, 0.7, 0);
-  bell(587, 2.2, 0.14, 0.7, 0.16);
-  bell(784, 2.6, 0.15, 0.8, 0.32);
-  bell(1046, 2.4, 0.1, 0.85, 0.5);
+  if (sample("bonanza", 1, 0.5)) return;
+  if (!ctx || !master || muted) return;
+  const t0 = ctx.currentTime;
 
-  // Sub floor.
-  partial({ freq: 98, dur: 2.8, gain: 0.2, type: "sine", attack: 0.05, wet: 0.4 });
-  partial({ freq: 49, dur: 3.2, gain: 0.16, type: "sine", attack: 0.08, wet: 0.3 });
-
-  // Shimmer sweeping upward into the tail.
+  // Riser: 1.1s of noise sweeping up into the hit.
   texture({
-    dur: 2.2,
-    gain: 0.05,
-    freq: 900,
-    sweepTo: 7000,
-    q: 0.7,
-    wet: 0.9,
-    attack: 0.4,
-    delay: 0.2,
+    dur: 1.1,
+    gain: 0.09,
+    freq: 260,
+    sweepTo: 5200,
+    q: 1.4,
+    attack: 0.5,
+    wet: 0.5,
   });
+
+  // Impact.
+  const hit = 1.1;
+  sub({ freq: 78, glideTo: 40, dur: 1.5, gain: 0.32, attack: 0.006, wet: 0.35, delay: hit });
+  texture({ dur: 0.5, gain: 0.13, freq: 1500, sweepTo: 200, q: 0.9, wet: 0.6, delay: hit });
+
+  // The pad: C2 / G2 / C3 / G3. Slow attack, long release, well behind the hit.
+  for (const [freq, level] of [
+    [65.4, 0.075],
+    [98.0, 0.06],
+    [130.8, 0.05],
+    [196.0, 0.032],
+  ] as const) {
+    const osc = ctx.createOscillator();
+    osc.type = "sawtooth";
+    osc.frequency.value = freq;
+    osc.detune.value = (Math.random() - 0.5) * 9;
+
+    // Filter opens as the chord blooms, which is what makes a pad breathe.
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.Q.value = 0.7;
+    lp.frequency.setValueAtTime(240, t0 + hit);
+    lp.frequency.linearRampToValueAtTime(1500, t0 + hit + 1.2);
+    lp.frequency.linearRampToValueAtTime(500, t0 + hit + 3.4);
+
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t0 + hit);
+    g.gain.linearRampToValueAtTime(level, t0 + hit + 0.35);
+    g.gain.setValueAtTime(level, t0 + hit + 1.6);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + hit + 3.6);
+
+    osc.connect(lp);
+    lp.connect(g);
+    connectVoice(g, 0.55);
+    osc.start(t0 + hit);
+    osc.stop(t0 + hit + 3.7);
+  }
 }

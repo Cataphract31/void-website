@@ -49,9 +49,15 @@ export function TopBar({ snap }: { snap: Snapshot }): JSX.Element {
         <div className="text-right">
           <div className="label">tickets</div>
           <div className="tnum text-[13px] font-semibold">
-            <span className="text-[var(--color-gold)]">{snap.bonanzaTickets}</span>
+            {/* Rev-share tickets never reset, so they run into five figures
+                fast — grouped, or the number stops being readable. */}
+            <span className="text-[var(--color-gold)]">
+              {snap.bonanzaTickets.toLocaleString()}
+            </span>
             <span className="text-[var(--color-dim)]"> / </span>
-            <span className="text-[var(--color-cyan)]">{snap.revShareTickets}</span>
+            <span className="text-[var(--color-cyan)]">
+              {snap.revShareTickets.toLocaleString()}
+            </span>
           </div>
         </div>
         <MuteButton />

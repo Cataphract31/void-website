@@ -138,11 +138,18 @@ export class Round {
   private computeHazard(liveCount: number): number {
     const h = this.config.hazard;
     const heat = liveCount / this.players.length;
+    // Thin-field relief. Crowding is a *fraction*, so three players in a
+    // three-player shaft are as dangerous as thirty in thirty — but that round
+    // is over after two deaths. Damping the base rate by absolute headcount
+    // gives a small field a real round instead of a coin flip. Applied to the
+    // crowding term only, so the creep's termination guarantee is untouched.
+    const thin =
+      h.thinField > 0 ? Math.min(1, Math.pow(liveCount / h.thinField, h.thinPower)) : 1;
     const creep =
       h.creep *
       Math.pow(this.tick, h.creepPower) *
       (h.creepBlend + (1 - h.creepBlend) * heat);
-    const raw = h.q0 * Math.pow(heat, h.alpha) + creep;
+    const raw = h.q0 * Math.pow(heat, h.alpha) * thin + creep;
     return Math.min(h.qMax, Math.max(h.qMin, raw));
   }
 

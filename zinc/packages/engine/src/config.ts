@@ -23,6 +23,20 @@ export interface HazardConfig {
   creepPower: number;
   /** How much of the creep applies regardless of crowding, in [0, 1]. */
   creepBlend: number;
+  /**
+   * Headcount at or above which the crowding term runs at full strength.
+   *
+   * A round ends when one player is left, so a 3-player field needs two deaths
+   * where a 30-player field needs twenty-nine. At the same rate per player the
+   * small field is over in a fraction of the ticks and feels rushed. Scaling
+   * the base rate down by *absolute* headcount buys thin fields the same arc.
+   *
+   * This is pure pacing. Return is fixed by the rake and by redistribution, so
+   * the hazard schedule can be moved freely without touching RTP or edge.
+   */
+  thinField: number;
+  /** Curvature of that relief. Below 1 it is gentle, above 1 aggressive. */
+  thinPower: number;
   qMin: number;
   qMax: number;
   /**
@@ -87,13 +101,18 @@ export const DEFAULT_CONFIG: GameConfig = {
     // Crowding stays steep: this is the "fewer people, more oxygen" signal the
     // whole game reads on, so pacing is bought from creep instead.
     alpha: 2.4,
-    // Curved rather than linear: near-silent while the shaft is busy so
-    // headcount stays the thing that matters, then sharp once it empties.
-    // Measured against linear creep this holds the crowding signal longer
-    // (crossover t23 vs t18) *and* cuts the long-round tail (p90 77 vs 93).
-    creep: 2.2e-5,
-    creepPower: 2,
-    creepBlend: 0.44,
+    // Cubic and tiny. At power 2 the creep had already overtaken crowding by
+    // the mid-game, which flattened the hazard: a wave of deaths barely moved
+    // the number because most of it was clock, not headcount. Cubic keeps
+    // creep near-zero through the whole busy phase and only closes the round
+    // out at the very end.
+    creep: 3.7e-7,
+    creepPower: 3,
+    // And the creep that does exist is now mostly crowd-linked (was 0.44), so
+    // even late deaths pull it down instead of leaving it stuck.
+    creepBlend: 0.22,
+    thinField: 12,
+    thinPower: 0.9,
     qMin: 0.004,
     qMax: 0.42,
     graceTicks: 2,
@@ -106,12 +125,18 @@ export const DEFAULT_CONFIG: GameConfig = {
     // cautious players, and it rewarded never leaving — the opposite of a
     // lively round. The climbing multiplier is already all the incentive
     // anyone needs to stay, so this makes every strategy land on exactly 98%.
-    ticketBase: 1,
+    // The demo granted a few hundred per round and the number felt like it
+    // meant something. Flat tickets are scale-free — every share is
+    // tickets/total — so the denomination is a pure presentation choice, and a
+    // bigger one reads better. 200 a round, same for everyone.
+    ticketBase: 200,
     ticketPerRisk: 0,
     forfeitOnDeath: false,
   },
   revShare: {
-    ticketsPerEntry: 1,
+    // Matched to the bonanza denomination for the same reason. Shares are
+    // ratios, so this changes nobody's payout by a lamport.
+    ticketsPerEntry: 200,
     halfLifeDays: 75,
   },
   // tickMs is a pure clock knob: it changes wall-clock pacing without touching
