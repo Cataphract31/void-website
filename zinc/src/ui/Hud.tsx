@@ -456,11 +456,17 @@ export function AutoPanel({
 }
 
 export function BonanzaBar({ snap }: { snap: Snapshot }): JSX.Element {
+  // Adaptive precision: a young pool grows by thousandths per round, and at
+  // one decimal it sat frozen at "0.0" through its entire infancy — the one
+  // number whose whole job is visibly growing. More digits while it is
+  // small, fewer as it gets big enough to move its own display.
+  const pool = snap.bonanzaPool;
+  const digits = pool < 1 ? 3 : pool < 100 ? 2 : 1;
   return (
     <div className="breathe mx-3 flex items-center gap-3 rounded-sm bg-gradient-to-r from-[#1b1608] to-[#0f1319] px-3 py-1.5">
       <span className="label text-[var(--color-gold)]">bonanza</span>
       <span className="tnum text-[17px] font-bold text-[var(--color-gold)]">
-        {snap.bonanzaPool.toFixed(1)} ◎
+        {pool.toFixed(digits)} ◎
       </span>
       <span className="label ml-auto hidden sm:inline">
         one ticket takes all
@@ -473,11 +479,14 @@ export function ActionBar({
   snap,
   onJoin,
   onWalkOut,
+  onStepOff,
   inline = false,
 }: {
   snap: Snapshot;
   onJoin: () => void;
   onWalkOut: () => void;
+  /** Lobby-only: refunds every plate and stands the player down. */
+  onStepOff?: () => void;
   /** In-column placement (desktop) instead of the full-width bottom bar. */
   inline?: boolean;
 }): JSX.Element {
@@ -553,14 +562,30 @@ export function ActionBar({
         ? "bg-[var(--color-profit)] text-[#03231a]"
         : "bg-[var(--color-panel2)] text-[var(--color-dim)]";
 
+  // The way out. A bonded player whose lobby never fills would otherwise be
+  // locked in with no exit — nothing between "wait indefinitely" and closing
+  // the tab. Refunds every plate, as if never bought.
+  const stepOff =
+    snap.phase === "lobby" && snap.you.joined && snap.connected && onStepOff ? (
+      <button
+        onClick={onStepOff}
+        className="label mt-1 w-full rounded-sm bg-[var(--color-panel2)] py-1.5 hover:text-[var(--color-text)]"
+      >
+        step off · refund {(k * snap.entry).toFixed(1)} ◎
+      </button>
+    ) : null;
+
   return wrap(
-    <button
-      disabled={!action}
-      onClick={action ?? undefined}
-      className={`display h-13 w-full rounded-sm py-3.5 text-[17px] font-bold tracking-[0.1em] transition-transform active:scale-[0.985] disabled:cursor-not-allowed ${bg}`}
-    >
-      {label}
-    </button>,
+    <>
+      <button
+        disabled={!action}
+        onClick={action ?? undefined}
+        className={`display h-13 w-full rounded-sm py-3.5 text-[17px] font-bold tracking-[0.1em] transition-transform active:scale-[0.985] disabled:cursor-not-allowed ${bg}`}
+      >
+        {label}
+      </button>
+      {stepOff}
+    </>,
     inline,
   );
 }
