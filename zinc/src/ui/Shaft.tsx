@@ -43,18 +43,19 @@ export function Shaft({
   useEffect(() => {
     const r = renderer.current;
     if (!r) return;
-    // Your plates cluster: the layout packs cells in array order, so putting
-    // every "you" plate in a contiguous run at the middle of the array lands
-    // them adjacent near the centre of the beehive instead of scattered
-    // wherever join order happened to file them. Deterministic — the same
-    // roster always yields the same order, so relayout never reshuffles.
-    const yours = snap.players.filter((p) => p.you);
-    const others = snap.players.filter((p) => !p.you);
-    const mid = Math.floor(others.length / 2);
-    const ordered = [...others.slice(0, mid), ...yours, ...others.slice(mid)];
+    // Everyone's plates group by owner, not just yours: multi-betting is only
+    // legible if a wallet holding four plates LOOKS like a wallet holding four
+    // plates. Sorting by (name, id) is deterministic for a fixed roster, and
+    // the layout packs adjacent array entries into adjacent slots. Your own
+    // plates are position-independent here — the layout pins anything marked
+    // `you` to the centre slots regardless of where it sits in this array.
+    const ordered = [...snap.players].sort((a, b) =>
+      a.name < b.name ? -1 : a.name > b.name ? 1 : a.id - b.id,
+    );
     r.update({
       cells: ordered.map((p) => ({
         id: p.id,
+        you: p.you,
         state: (p.outcome === "dead"
           ? "dying"
           : p.outcome === "cashed"
