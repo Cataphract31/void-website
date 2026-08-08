@@ -17,6 +17,13 @@ export class BonanzaPool {
   roundsSinceFire = 0;
   private tickets = new Map<number, number>();
   private ticketTotal = 0;
+  /**
+   * The raw draws the last `roll` consumed, and the ticket total they were
+   * measured against. Recorded with the round so a player can recompute both
+   * from the revealed seed and check that the jackpot was not simply handed
+   * to whoever the house preferred.
+   */
+  lastDraws: { fire: number; winner: number; totalTickets: number } | null = null;
 
   constructor(private readonly config: BonanzaConfig, seedPool = 0) {
     this.pool = seedPool;
@@ -40,13 +47,24 @@ export class BonanzaPool {
     return this.ticketTotal;
   }
 
-  /** Rolls the per-round fire chance. Returns the payout, or null if it held. */
+  /**
+   * Rolls the per-round fire chance. Returns the payout, or null if it held.
+   *
+   * Both draws are taken unconditionally, before any early return. A roll that
+   * consumed a different number of draws depending on whether it fired would
+   * desynchronise every later roll on the same stream from the replay a player
+   * runs to check it — the jackpot would become unverifiable the first time it
+   * held on an empty pool.
+   */
   roll(rng: Rng): BonanzaFire | null {
     this.roundsSinceFire++;
-    if (rng.next() >= this.config.fireProb) return null;
+    const fireDraw = rng.next();
+    const winnerDraw = rng.next();
+    this.lastDraws = { fire: fireDraw, winner: winnerDraw, totalTickets: this.ticketTotal };
+    if (fireDraw >= this.config.fireProb) return null;
     if (this.ticketTotal <= 0 || this.pool <= 0) return null;
 
-    let target = rng.next() * this.ticketTotal;
+    let target = winnerDraw * this.ticketTotal;
     let winnerId = -1;
     for (const [id, count] of this.tickets) {
       target -= count;
@@ -124,6 +142,56 @@ export class RevShareLedger {
     return this.epochMs;
   }
 
+  /**
+   * Banks everything owed so far and restarts the accumulator from zero.
+   *
+   * `accPerWeight` is a running sum whose increments are `amount / normTotal`,
+   * and `normTotal` grows like e^(lambda*t) on a process that stays up. So the
+   * increments shrink geometrically while the total they are added to
+   * converges — and once an increment falls below one ulp of the running sum,
+   * `+=` discards it. The rake keeps being taken and booked as distributed,
+   * and not a lamport reaches anyone. Measured on the real class, crediting
+   * goes materially lossy after roughly six years of uptime.
+   *
+   * Rescaling cannot fix this: the increment and the sum it is added to both
+   * carry the same factor, so their RATIO — the thing that matters — is
+   * invariant under any change of units. The accumulator has to be emptied
+   * instead. Settling every holder converts their claim into a plain SOL
+   * figure in `settled`, after which the sum can start again at zero and the
+   * next increments are exact. Nothing is created or lost: this is the same
+   * arithmetic every holder would get from claiming, applied to all of them.
+   *
+   * With `accPerWeight` back at zero the normalisation is free to be re-based
+   * in the same pass, which also keeps `normTotal` from drifting toward
+   * overflow on a very long-lived process.
+   */
+  private flush(nowMs: number): void {
+    if (this.epochMs === null) return;
+    for (const id of this.norm.keys()) this.settle(id);
+    this.accPerWeight = 0;
+    this.debt.clear();
+    const shift = nowMs - this.epochMs;
+    if (this.lambda > 0 && shift > 0) {
+      const down = Math.exp(-this.lambda * shift);
+      if (Number.isFinite(down) && down > 0) {
+        for (const [id, n] of this.norm) this.norm.set(id, n * down);
+        this.normTotal *= down;
+        this.epochMs = nowMs;
+      }
+    }
+  }
+
+  /**
+   * Flush every four half-lives — about eight months at the shipped 60-day
+   * setting, so O(holders) work roughly once a year, against the alternative
+   * of silently paying nobody. Four half-lives is far inside the range where
+   * the arithmetic is still exact, so this never runs late.
+   */
+  private maybeFlush(nowMs: number): void {
+    if (this.lambda <= 0 || this.epochMs === null) return;
+    if (this.lambda * (nowMs - this.epochMs) > Math.LN2 * 4) this.flush(nowMs);
+  }
+
   private settle(playerId: number): void {
     const owed = (this.norm.get(playerId) ?? 0) * this.accPerWeight;
     const pending = owed - (this.debt.get(playerId) ?? 0);
@@ -136,6 +204,7 @@ export class RevShareLedger {
   /** Grants tickets for an entry paid at the given simulated time. */
   credit(playerId: number, nowMs: number, tickets = this.config.ticketsPerEntry): void {
     if (tickets <= 0) return;
+    this.maybeFlush(nowMs);
     this.settle(playerId);
     const scaled = tickets * Math.exp(this.lambda * (nowMs - this.epoch(nowMs)));
     const next = (this.norm.get(playerId) ?? 0) + scaled;

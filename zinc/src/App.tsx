@@ -8,7 +8,7 @@ import { HistoryPanel } from "@/ui/History";
 import { StatsPanel } from "@/ui/Stats";
 import { TickRing } from "@/ui/TickRing";
 import { BonanzaOverlay } from "@/ui/Bonanza";
-import { DevPanel } from "@/ui/DevPanel";
+import { BankPanel, type Banker } from "@/ui/Bank";
 import { ActionBar, AutoPanel, BonanzaBar, TopBar } from "@/ui/Hud";
 import { InfoOverlay } from "@/ui/Info";
 import { Tutorial, tutorialSeen } from "@/ui/Tutorial";
@@ -27,10 +27,11 @@ type Tab = "roster" | "history" | "stats";
 export default function App(): JSX.Element {
   const client = getClient();
   const [snap, setSnap] = useState<Snapshot>(() => client.snapshot());
-  const [selected, setSelected] = useState<number | null>(null);
+  const [selected, setSelected] = useState<{ roundId: number; id: number } | null>(null);
   const [showInfo, setShowInfo] = useState(false);
   const [showIntro, setShowIntro] = useState(() => !tutorialSeen());
   const [showChars, setShowChars] = useState(false);
+  const [showBank, setShowBank] = useState(false);
   const [tab, setTab] = useState<Tab>("roster");
 
   useEffect(() => client.subscribe(setSnap), [client]);
@@ -51,11 +52,16 @@ export default function App(): JSX.Element {
   }, []);
 
   // Seat ids are only unique within a round: id 3 next round is a different
-  // person. Without this the open card silently becomes a stranger's, still
-  // presenting itself as the same continuous player.
-  useEffect(() => setSelected(null), [snap.roundId]);
-
-  const chosen = selected === null ? null : snap.players.find((p) => p.id === selected);
+  // person. The selection therefore carries the round it was made in, and is
+  // discarded during render rather than in an effect — an effect runs after
+  // paint, so the first frame of the new round still resolved the old id and
+  // showed a stranger's card as if it were the same continuous player.
+  const chosen =
+    selected && selected.roundId === snap.roundId
+      ? (snap.players.find((p) => p.id === selected.id) ?? null)
+      : null;
+  const select = (id: number | null): void =>
+    setSelected(id === null ? null : { roundId: snap.roundId, id });
 
   return (
     <div className="mx-auto flex h-full max-w-[1180px] flex-col">
@@ -66,6 +72,7 @@ export default function App(): JSX.Element {
         onWalletChange={() => {
           if (!client.isLocal) client.reauth();
         }}
+        onShowBank={snap.bank ? () => setShowBank(true) : undefined}
       />
       <BonanzaBar snap={snap} />
 
@@ -77,7 +84,7 @@ export default function App(): JSX.Element {
               canvas, risk relegated to a thin bar below it — left the single
               most important quantity in the game unread. */}
           <div className="mb-1.5 flex shrink-0 items-stretch gap-2">
-            <TickRing snap={snap} tickMs={TICK_MS / snap.dev.speed} />
+            <TickRing snap={snap} tickMs={TICK_MS} />
             <div className="flex min-w-0 flex-1 items-center justify-center">
               <Multiplier snap={snap} />
             </div>
@@ -87,22 +94,19 @@ export default function App(): JSX.Element {
           {/* Flat: the lattice reads as a surface, not a framed screenshot.
               Its darker pit background is the only separation it needs. */}
           <div className="relative min-h-0 flex-1 overflow-hidden rounded-sm">
-            <Shaft snap={snap} onSelectCell={setSelected} />
+            <Shaft snap={snap} onSelectCell={select} />
 
             {chosen && (
               <PlayerCard
                 p={chosen}
                 entry={snap.entry}
-                onClose={() => setSelected(null)}
+                onClose={() => select(null)}
               />
             )}
 
             <ShatterCard snap={snap} />
             <WinnerOverlay snap={snap} />
             <BonanzaOverlay event={snap.bonanza} />
-            {import.meta.env.DEV && client.isLocal && (
-              <DevPanel client={client} snap={snap} />
-            )}
           </div>
         </div>
 
@@ -119,7 +123,7 @@ export default function App(): JSX.Element {
           <div className="min-h-0 flex-1">
             <TabbedPanel snap={snap} tab={tab} onTab={setTab}>
               {tab === "roster" ? (
-                <Roster snap={snap} onSelect={setSelected} />
+                <Roster snap={snap} onSelect={select} />
               ) : tab === "history" ? (
                 <HistoryPanel snap={snap} client={client} />
               ) : (
@@ -136,7 +140,7 @@ export default function App(): JSX.Element {
       <div className="mt-1.5 h-[148px] shrink-0 px-1.5 lg:hidden">
         <TabbedPanel snap={snap} tab={tab} onTab={setTab}>
           {tab === "roster" ? (
-            <Roster snap={snap} onSelect={setSelected} />
+            <Roster snap={snap} onSelect={select} />
           ) : tab === "history" ? (
             <HistoryPanel snap={snap} client={client} />
           ) : (
@@ -160,6 +164,14 @@ export default function App(): JSX.Element {
           snap={snap}
           onPick={(id) => client.setCharacter(id)}
           onClose={() => setShowChars(false)}
+        />
+      )}
+      {showBank && snap.bank && !client.isLocal && (
+        <BankPanel
+          snap={snap}
+          bank={snap.bank}
+          client={client as unknown as Banker}
+          onClose={() => setShowBank(false)}
         />
       )}
 

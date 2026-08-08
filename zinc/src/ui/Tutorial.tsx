@@ -1,4 +1,5 @@
 import { useState, type JSX } from "react";
+import { DEFAULT_CONFIG } from "@zinc/engine";
 
 /**
  * First-visit walkthrough, modelled on the step-card onboarding the owner
@@ -38,7 +39,10 @@ const STEPS: Step[] = [
     title: "Welcome onto THIN ICE",
     body: [
       "Everyone pays the same entry to step onto the ice with a crowd of strangers.",
-      "Every half second, the ice takes someone.",
+      // Not "takes someone": most ticks take nobody, and teaching a
+      // one-death-per-tick model the first round then contradicts is a bad
+      // way to meet a player. Info.tsx has always worded this correctly.
+      "Every half second the ice rolls, and it can take anyone standing on it.",
     ],
     visual: "ice",
   },
@@ -65,7 +69,9 @@ const STEPS: Step[] = [
     title: "Leave with the money",
     body: [
       "Hit Extract any moment and keep what you're holding. Get caught and you keep nothing.",
-      "98% of every coin goes back to players: the pot, a jackpot, and rakeback that keeps paying you even after you stop playing.",
+      // Derived, never restated: a hardcoded rake figure in player-facing copy
+      // has already gone stale once in this build.
+      `${((1 - DEFAULT_CONFIG.rake.house) * 100).toFixed(0)}% of every coin goes back to players: the pot, a jackpot, and rakeback that keeps paying you even after you stop playing.`,
     ],
     visual: "payout",
   },

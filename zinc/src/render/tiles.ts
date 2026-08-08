@@ -73,20 +73,28 @@ export class TileAtlas {
       const ctx = canvas.getContext("2d")!;
       ctx.scale(dpr, dpr);
 
-      ctx.save();
-      hexPath(ctx, this.w / 2, this.h / 2, r);
-      ctx.clip();
-
       // Cover-fit: the art is drawn as the same flat-top hexagon, so this is
-      // near enough an exact overlay; the clip absorbs any overhang.
+      // near enough an exact overlay; the mask below absorbs any overhang.
       const s = Math.max(this.w / img.width, this.h / img.height);
       const dw = img.width * s;
       const dh = img.height * s;
-      // Crunchy when blown up, filtered when shrunk — nearest-neighbour
-      // downscaling of dense pixel art turns cracks into moire.
-      ctx.imageSmoothingEnabled = dw < img.width * 0.9;
+      // Always filtered, at the best quality the browser offers. This used to
+      // switch to nearest-neighbour whenever the art was enlarged, which on a
+      // 4K display (large plates, 384px source art) blew the faces up into
+      // visible pixel blocks — soft beats blocky at every scale.
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
       ctx.drawImage(img, (this.w - dw) / 2, (this.h - dh) / 2, dw, dh);
-      ctx.restore();
+
+      // Cut the hex boundary with a composited fill, not ctx.clip():
+      // Chromium applies clip paths without anti-aliasing, which is exactly
+      // the stair-stepped plate edge reported on 4K. A destination-in fill
+      // masks through the fill rasteriser, which IS anti-aliased, so the
+      // silhouette comes out with a clean feathered edge at any DPR.
+      ctx.globalCompositeOperation = "destination-in";
+      hexPath(ctx, this.w / 2, this.h / 2, r);
+      ctx.fill();
+      ctx.globalCompositeOperation = "source-over";
 
       this.baked.set(name, canvas);
     }

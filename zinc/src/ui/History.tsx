@@ -116,10 +116,11 @@ function Row({ h, onVerify }: { h: HistoryEntry; onVerify: () => void }): JSX.El
         {h.unavailable ? (
           /* No verdict at all rather than a false one: without crypto.subtle
              (any insecure origin, e.g. testing over a LAN IP) the hash cannot
-             be computed, and calling an honest round a mismatch is the worst
-             thing this panel could possibly say. */
+             be computed, and a round whose record will not parse cannot be
+             replayed either. Calling an honest round a mismatch is the worst
+             thing this panel could possibly say, so it says neither. */
           <span className="label ml-auto shrink-0 text-[var(--color-warn)]">
-            needs https
+            unverifiable
           </span>
         ) : h.verified === null ? (
           <button
@@ -167,6 +168,27 @@ function Row({ h, onVerify }: { h: HistoryEntry; onVerify: () => void }): JSX.El
             >
               {h.rulesOk ? "✓" : "✗"} played under the published rules: same
               hazard curve, same rake, same payouts
+            </div>
+          )}
+          {/* Your own money. The three checks above prove the round was honest;
+              this one proves the number you were actually paid is the number
+              that round produced for your plate. */}
+          {h.payoutOk !== null && (
+            <div
+              style={{ color: h.payoutOk ? "var(--color-profit)" : "var(--color-danger)" }}
+            >
+              {h.payoutOk ? "✓" : "✗"} your plate in the replay paid exactly what
+              you were credited
+            </div>
+          )}
+          {/* The jackpot draw runs on a stream derived from the same committed
+              seed, so a fire is as checkable as an elimination. */}
+          {h.bonanzaOk !== null && (
+            <div
+              style={{ color: h.bonanzaOk ? "var(--color-profit)" : "var(--color-danger)" }}
+            >
+              {h.bonanzaOk ? "✓" : "✗"} the bonanza draw came off the committed
+              seed, not a number the house picked
             </div>
           )}
         </div>

@@ -126,7 +126,7 @@ export class LatticeRenderer {
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext("2d", { alpha: false })!;
-    this.dpr = Math.min(2, window.devicePixelRatio || 1);
+    this.dpr = Math.min(3, window.devicePixelRatio || 1);
     this.resize();
   }
 
@@ -140,8 +140,11 @@ export class LatticeRenderer {
     // Re-read the pixel ratio here rather than trusting the one sampled at
     // construction: dragging the window to a display with a different density,
     // or zooming the browser, changes it, and a backing store rebuilt at the
-    // stale ratio leaves the whole lattice blurry until a reload.
-    this.dpr = Math.min(2, window.devicePixelRatio || 1);
+    // stale ratio leaves the whole lattice blurry until a reload. Capped at 3
+    // (was 2): a 4K display at 250% OS scaling reports 2.5, and rendering
+    // under the cap upscales the whole scene — visibly soft on exactly the
+    // screens with the most pixels to show off on.
+    this.dpr = Math.min(3, window.devicePixelRatio || 1);
     this.w = Math.max(1, rect.width);
     this.h = Math.max(1, rect.height);
     this.canvas.width = Math.ceil(this.w * this.dpr);
@@ -155,6 +158,40 @@ export class LatticeRenderer {
 
   setSinkPoint(x: number, y: number): void {
     this.sink = { x, y };
+  }
+
+  /**
+   * One pre-baked radial glow per shard kind.
+   *
+   * These were built with createRadialGradient inside the per-shard draw loop,
+   * i.e. once per glowing shard per frame. A jackpot on a full lattice throws
+   * three shards from every plate — on a 400-plate field that is over a
+   * thousand live shards allocating a thousand gradients sixty times a second,
+   * so the one moment the game most needs to land is the one that stutters.
+   * Baked once, then blitted.
+   */
+  private glow = new Map<string, HTMLCanvasElement>();
+
+  private glowSprite(kind: "value" | "gold"): HTMLCanvasElement {
+    const cached = this.glow.get(kind);
+    if (cached) return cached;
+    const size = 64;
+    const c = document.createElement("canvas");
+    c.width = size;
+    c.height = size;
+    const g = c.getContext("2d")!;
+    const grad = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    if (kind === "value") {
+      grad.addColorStop(0, "rgba(255,120,170,1)");
+      grad.addColorStop(1, "rgba(255,45,111,0)");
+    } else {
+      grad.addColorStop(0, "rgba(255,214,120,1)");
+      grad.addColorStop(1, "rgba(255,150,40,0)");
+    }
+    g.fillStyle = grad;
+    g.fillRect(0, 0, size, size);
+    this.glow.set(kind, c);
+    return c;
   }
 
   /** Fine static grain. Costs one blit and stops large flat areas looking bare. */
@@ -218,7 +255,15 @@ export class LatticeRenderer {
     let sig = 0;
     for (const c of snap.cells) sig = (sig * 31 + c.id) >>> 0;
     const key = `${snap.cells.length}:${sig}:${this.w | 0}:${this.h | 0}`;
-    if (key !== this.layoutKey) {
+    const relayout = key !== this.layoutKey;
+    if (relayout) {
+      // Positions only. `layout` used to stamp the NEW state onto every cell
+      // while keeping the old timer, so the diff below then found nothing
+      // changed and skipped the fracture, the shards and the shake — while
+      // the stale timer made drawCells treat the plate as already gone. The
+      // result was a plate vanishing in one frame with the shatter sound
+      // still playing, on exactly the snapshots where a death and a roster
+      // change arrive together, which is most of them.
       this.layout(snap.cells);
       this.layoutKey = key;
     }
@@ -334,7 +379,9 @@ export class LatticeRenderer {
         id: input.id,
         x,
         y,
-        state: input.state,
+        // Carry the PREVIOUS state forward and let the transition diff apply
+        // the new one, so a relayout never swallows a death or a cash-out.
+        state: prev?.state ?? input.state,
         t: prev?.t ?? 0,
         seed: ((input.id * 2654435761) >>> 0) / 4294967296,
         born: prev?.born ?? 0,
@@ -370,8 +417,12 @@ export class LatticeRenderer {
    */
   private eruptGold(): void {
     const r = this.radius;
+    // Thinned out on a packed lattice: three shards from each of 400 plates is
+    // 1200 additive glows a frame for nearly three seconds. The celebration
+    // reads the same at a few hundred and actually holds its frame rate.
+    const per = this.cells.size > 120 ? 1 : 3;
     for (const c of this.cells.values()) {
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < per; i++) {
         const a = Math.random() * Math.PI * 2;
         const sp = 90 + Math.random() * 260;
         this.shards.push({
@@ -899,21 +950,11 @@ export class LatticeRenderer {
       ctx.save();
       ctx.translate(s.x, s.y);
       ctx.rotate(s.rot);
-      if (s.kind === "value") {
+      if (s.kind === "value" || s.kind === "gold") {
         ctx.globalCompositeOperation = "lighter";
-        const g = ctx.createRadialGradient(0, 0, 0, 0, 0, s.size * 3.2);
-        g.addColorStop(0, `rgba(255,120,170,${a})`);
-        g.addColorStop(1, "rgba(255,45,111,0)");
-        ctx.fillStyle = g;
-        ctx.fillRect(-s.size * 3.2, -s.size * 3.2, s.size * 6.4, s.size * 6.4);
-      }
-      if (s.kind === "gold") {
-        ctx.globalCompositeOperation = "lighter";
-        const g = ctx.createRadialGradient(0, 0, 0, 0, 0, s.size * 4);
-        g.addColorStop(0, `rgba(255,214,120,${a})`);
-        g.addColorStop(1, "rgba(255,150,40,0)");
-        ctx.fillStyle = g;
-        ctx.fillRect(-s.size * 4, -s.size * 4, s.size * 8, s.size * 8);
+        ctx.globalAlpha = a;
+        const r = s.size * (s.kind === "value" ? 3.2 : 4);
+        ctx.drawImage(this.glowSprite(s.kind), -r, -r, r * 2, r * 2);
       }
       ctx.globalAlpha = a;
       ctx.beginPath();

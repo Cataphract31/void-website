@@ -120,11 +120,6 @@ async function loadSamplePack(ac: AudioContext): Promise<void> {
   );
 }
 
-/** True once a pack file for this cue has loaded. Drives the dev panel's indicator. */
-export function hasSample(name: string): boolean {
-  return samples.has(name as SampleName);
-}
-
 /** Plays a pack sample if one was found. Returns false to fall through to synthesis. */
 function sample(name: SampleName, gain = 1, wet = 0.25, rate = 1): boolean {
   const buf = samples.get(name);

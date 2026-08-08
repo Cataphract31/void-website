@@ -3,7 +3,9 @@ import {
   DEFAULT_CONFIG,
   RevShareLedger,
   Round,
+  BONANZA_TAG,
   canonicalConfig,
+  deriveRng,
   drawFieldSize,
   hazardAt,
   mulberry32,
@@ -11,6 +13,7 @@ import {
   replayRound,
   rngFromSeedHex,
   totalRake,
+  verifyBonanzaDraw,
   type Entrant,
   type GameConfig,
   type Player,
@@ -74,38 +77,12 @@ export interface WinnerInfo {
   lastStanding: boolean;
 }
 
-export interface LogEntry {
-  id: number;
-  kind: "join" | "seal" | "death" | "cash" | "you" | "bonanza" | "info";
-  text: string;
-  value?: string;
-}
-
 export interface BonanzaEvent {
   amount: number;
   winner: string;
   youWon: boolean;
   /** When it fired, so the overlay knows how far through the sequence it is. */
   at: number;
-}
-
-/** Knobs exposed for testing. Not shipped to players. */
-export interface DevSettings {
-  /** Forces the field size instead of the configured random draw. */
-  fieldSize: number | null;
-  /** Multiplies tick speed. 2 = double time. */
-  speed: number;
-  /** Overrides the per-round jackpot chance so it can be seen firing. */
-  bonanzaOdds: number | null;
-  /**
-   * Forces the DISPLAYED danger — ring, seam glow, cracking, trembling, tick
-   * audio — without touching the actual elimination rolls. High-risk visuals
-   * are otherwise near-impossible to audition, because the states that
-   * produce them mostly occur with two players left in a p99 round.
-   */
-  hazardOverride: number | null;
-  /** Rounds seal with zero hazard: nobody can die. A visual test chamber. */
-  immortal: boolean;
 }
 
 export interface AutoSettings {
@@ -175,7 +152,6 @@ export interface Snapshot {
     /** Everything the stream has ever paid you. */
     revStreamed: number;
   };
-  log: LogEntry[];
   /** Finished rounds, newest first, each replayable and verifiable. */
   history: HistoryEntry[];
   /** Fairness commitment for the round currently forming or running. */
@@ -187,7 +163,22 @@ export interface Snapshot {
   online: number;
   /** False while the socket is down, so the UI can say so instead of freezing. */
   connected: boolean;
-  dev: DevSettings;
+  /**
+   * On-chain banking, networked mode with a real wallet only. Absent in the
+   * demo and for guests — there is no chain identity to move money for.
+   */
+  bank?: BankState;
+}
+
+export interface BankState {
+  /** Where deposits go: the house account this server pays from and into. */
+  house: string;
+  /** True while a deposit or withdrawal is in flight. */
+  busy: boolean;
+  /** Outcome of the last operation, for the panel to show. */
+  note: string;
+  /** True when the last note is a success, false for a failure, null idle. */
+  ok: boolean | null;
 }
 
 export interface PlayerStats {
@@ -201,6 +192,12 @@ export interface PlayerStats {
   bestMultiple: number;
   /** Lifetime rakeback received. */
   revEarned: number;
+  /**
+   * Lifetime jackpot winnings. Paid straight to the balance rather than
+   * through a round settlement, so it is not part of `returned` and has to be
+   * carried separately or the record understates by the whole pool.
+   */
+  bonanzaWon?: number;
 }
 
 const YOU_ID = 9999;
@@ -241,19 +238,23 @@ interface SaveState {
   stats?: PlayerStats;
 }
 
+/**
+ * Any stored value, forced to a real number. A save from an older schema (or
+ * an edited one) carries undefined where a number is expected, and feeding
+ * that into the ledgers poisons the totals with NaN — after which every
+ * percentage in the HUD reads "NaN%" and no reload fixes it, because the bad
+ * value is what got persisted.
+ */
+function num(v: unknown, fallback = 0): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
+}
+
 function loadSave(): SaveState | null {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
     const s = JSON.parse(raw) as SaveState;
     if (!Number.isFinite(s.wallet)) return null;
-    // Every numeric field is scrubbed, not just the wallet. A save from an
-    // older schema (or an edited one) carries undefined where a number is
-    // expected, and feeding that into the rev-share ledger poisons the weight
-    // totals with NaN — after which every percentage in the HUD reads "NaN%"
-    // and no reload fixes it, because the bad value is what got persisted.
-    const num = (v: unknown, fallback = 0): number =>
-      typeof v === "number" && Number.isFinite(v) ? v : fallback;
     return {
       ...s,
       wallet: num(s.wallet),
@@ -280,11 +281,47 @@ function loadSave(): SaveState | null {
  */
 export async function verifyEntry(h: HistoryEntry, expected: GameConfig): Promise<void> {
   try {
+    // A row whose record could not even be parsed is UNVERIFIABLE, which is a
+    // different statement from "this round was rigged". Saying the second when
+    // you only know the first is the exact accusation this panel must never
+    // make by accident.
+    if (h.unavailable) {
+      h.seedOk = h.replayOk = h.rulesOk = h.verified = null;
+      return;
+    }
+
     // Replay under the rules recorded with the round, not the ones this build
     // ships: a round played before a config change is still an honest round.
     const rules = h.record.config ?? expected;
     const replay = replayRound(rules, h.record);
     h.replayOk = outcomeDigest(replay) === h.digest;
+
+    // Your own money, checked against the round rather than taken on trust.
+    if (h.yourSeat == null) {
+      h.payoutOk = null;
+    } else {
+      const mine = replay.players.find((p) => p.id === h.yourSeat);
+      const claimed = h.yourMultiple ?? 0;
+      const actual = mine ? mine.cashedOut / rules.entry : -1;
+      // Lamport-scale tolerance: both sides are floats derived by division.
+      h.payoutOk = mine !== undefined && Math.abs(actual - claimed) < 1e-6;
+    }
+
+    // THE binding check. The replay runs on record.seedHex; the commitment is
+    // checked against the row's seedHex. Nothing else forces those to be the
+    // same value, and if they can differ then an operator commits to seed A,
+    // plays the round on seed B, and ships {commit(A), A, record(B)}: the
+    // replay agrees with itself, the hash agrees with itself, and a rigged
+    // round renders three green ticks. The two seeds must be one seed.
+    const seedsAgree =
+      h.record.seedHex !== undefined && h.record.seedHex === h.seedHex;
+
+    // Likewise the commitment must be the one this client SAW before the round
+    // sealed. Checking a server-supplied seed against a server-supplied hash
+    // that arrived in the same message proves only that the server can run
+    // sha256: any seed picked after the fact hashes to a commitment computed
+    // after the fact. `observedCommit` is what was on screen during the lobby.
+    const commitPinned = h.observedCommit === undefined || h.observedCommit === h.commit;
 
     const canonical = canonicalConfig(rules);
     const rulesHash = await sha256Hex(canonical);
@@ -303,16 +340,28 @@ export async function verifyEntry(h: HistoryEntry, expected: GameConfig): Promis
       // it against the ceremony it was actually played under rather than
       // calling it a mismatch: the old commitment covered the seed alone, so
       // that is exactly — and only — what can honestly be verified about it.
-      h.seedOk = h.commit !== "" && (await sha256Hex(`thinice:${h.roundId}:${h.seedHex}`)) === h.commit;
+      h.seedOk =
+        commitPinned &&
+        h.commit !== "" &&
+        (await sha256Hex(`thinice:${h.roundId}:${h.seedHex}`)) === h.commit;
       h.rulesOk = null;
+      h.bonanzaOk = null;
       h.verified = h.replayOk === true && h.seedOk === true;
       return;
     }
 
     const hash = await sha256Hex(commitPreimage(h.roundId, h.seedHex, rulesHash));
-    h.seedOk = h.commit !== "" && hash === h.commit;
+    h.seedOk = seedsAgree && commitPinned && h.commit !== "" && hash === h.commit;
     h.rulesOk = canonical === canonicalConfig(expected);
-    h.verified = h.replayOk === true && h.seedOk === true && h.rulesOk === true;
+    h.bonanzaOk = verifyBonanzaDraw(h.record);
+    // Null receipts are "nothing to check here", not failures — only an
+    // outright false may condemn a round.
+    h.verified =
+      h.replayOk === true &&
+      h.seedOk === true &&
+      h.rulesOk === true &&
+      h.bonanzaOk !== false &&
+      h.payoutOk !== false;
   } catch {
     h.verified = false;
     h.seedOk = h.seedOk ?? false;
@@ -330,8 +379,15 @@ export interface HistoryEntry {
   yourOutcome: "none" | "cashed" | "dead";
   yourMultiple: number | null;
   bestMultiple: number;
-  /** Published before the round sealed. */
+  /** Published before the round sealed — as reported with the finished round. */
   commit: string;
+  /**
+   * The commitment this client actually saw on screen while the round was
+   * still forming, recorded at the time. Undefined when the round predates
+   * this client's connection, in which case there is nothing to compare and
+   * the check is skipped rather than failed.
+   */
+  observedCommit?: string;
   /** Revealed once the round ends. */
   seedHex: string;
   /** null = not yet checked; then the verdict of the in-browser replay. */
@@ -346,10 +402,26 @@ export interface HistoryEntry {
    * this check the other two prove only internal consistency.
    */
   rulesOk: boolean | null;
-  /** True when the browser cannot hash at all, so no verdict is honest. */
+  /**
+   * Receipt: did the jackpot draw come off the committed seed? Null for
+   * rounds recorded before the draw was folded into the record.
+   */
+  bonanzaOk: boolean | null;
+  /**
+   * Receipt: does the replayed round pay YOUR seat exactly what this row says
+   * you were paid? Null when the round did not report a seat. Without it the
+   * other receipts prove the round was honest in the abstract while the line
+   * describing your own result remains an unchecked claim.
+   */
+  payoutOk: boolean | null;
+  /** Your plate in that round, from the server's entry row. */
+  yourSeat?: number | null;
+  /**
+   * True when no verdict is honest at all: the browser cannot hash (insecure
+   * origin), or the round's record could not be parsed. Not a mismatch.
+   */
   unavailable?: boolean;
   record: RoundRecord;
-  immortal: boolean;
   digest: string;
   /** Who took the round, for the champions strip and the team tally. */
   winnerChar: string | null;
@@ -367,6 +439,7 @@ export class GameClient {
     returned: 0,
     bestMultiple: 0,
     revEarned: 0,
+    bonanzaWon: 0,
   };
   /** Presentation-side randomness only: bot personalities, names, arrivals. */
   private rng = mulberry32((Date.now() & 0xffffffff) >>> 0);
@@ -394,8 +467,6 @@ export class GameClient {
   private lobbyEntrants: Entrant[] = [];
   /** Wall-clock time each bot walks into the lobby, so the room fills visibly. */
   private arrivals = new Map<number, number>();
-  private log: LogEntry[] = [];
-  private logSeq = 0;
   private loopTimer: number | null = null;
   /** Absolute time the next tick fires. Advanced by the interval on each fire,
    * so the realised period averages exactly tickMs instead of quantising up to
@@ -415,8 +486,6 @@ export class GameClient {
   private revStreamedLifetime = 0;
 
   private bonanza: BonanzaEvent | null = null;
-  private forceBonanza = false;
-  private roundImmortal = false;
   private winner: WinnerInfo | null = null;
   private teamWins: Record<string, number> = {};
   /**
@@ -427,13 +496,6 @@ export class GameClient {
   charId: string = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)]!.id;
   private charMap = new Map<number, string>();
   auto: AutoSettings = { enabled: false, target: 2 };
-  dev: DevSettings = {
-    fieldSize: null,
-    speed: 1,
-    bonanzaOdds: null,
-    hazardOverride: null,
-    immortal: false,
-  };
 
   private listeners = new Set<(s: Snapshot) => void>();
 
@@ -459,8 +521,30 @@ export class GameClient {
       // restored: the ledger's earnings counter restarts at zero each session,
       // and a restored marker would sit above it, silently blocking claims.
       this.revStreamedLifetime = save.revStreamed ?? 0;
-      if (save.teamWins) this.teamWins = save.teamWins;
-      if (save.stats) this.stats = save.stats;
+      // Nested objects get the same scrubbing as the flat fields, and for the
+      // same reason: an older or edited save missing one stat yields
+      // `undefined + entry` = NaN on the next round, which is then persisted.
+      // A NaN that survives reloads is the exact failure the scrub exists for,
+      // and stopping at the top level left two doors open.
+      if (save.teamWins && typeof save.teamWins === "object") {
+        const wins: Record<string, number> = {};
+        for (const [k, v] of Object.entries(save.teamWins)) {
+          if (typeof v === "number" && Number.isFinite(v)) wins[k] = v;
+        }
+        this.teamWins = wins;
+      }
+      if (save.stats && typeof save.stats === "object") {
+        const st = save.stats as Partial<PlayerStats>;
+        this.stats = {
+          roundsPlayed: num(st.roundsPlayed),
+          roundsWon: num(st.roundsWon),
+          wagered: num(st.wagered),
+          returned: num(st.returned),
+          bestMultiple: num(st.bestMultiple),
+          revEarned: num(st.revEarned),
+          bonanzaWon: num(st.bonanzaWon),
+        };
+      }
       // The round counter keeps climbing across refreshes instead of the
       // site appearing to reset to round one every visit.
       if (typeof save.roundId === "number" && save.roundId > 0) {
@@ -496,10 +580,7 @@ export class GameClient {
       }
     } else if (this.phase === "live") {
       if (now >= this.nextTickAt) {
-        this.nextTickAt = Math.max(
-          now + 20,
-          this.nextTickAt + this.config.timing.tickMs / this.dev.speed,
-        );
+        this.nextTickAt = Math.max(now + 20, this.nextTickAt + this.config.timing.tickMs);
         this.tick();
         return;
       }
@@ -529,11 +610,6 @@ export class GameClient {
   private emit(): void {
     const s = this.snapshot();
     for (const fn of this.listeners) fn(s);
-  }
-
-  private say(kind: LogEntry["kind"], text: string, value?: string): void {
-    this.log.unshift({ id: this.logSeq++, kind, text, value });
-    if (this.log.length > 60) this.log.pop();
   }
 
   /** Bots aim for a target multiple, with nerve deciding who bails when it gets hot. */
@@ -574,7 +650,6 @@ export class GameClient {
     this.roundId++;
     this.joined = false;
     this.round = null;
-    this.log = [];
     this.names.clear();
     this.phaseEnd = Date.now() + this.config.timing.lobbyMs;
 
@@ -598,7 +673,7 @@ export class GameClient {
       this.emit();
     })();
 
-    const n = this.dev.fieldSize ?? drawFieldSize(this.config, this.rng.next());
+    const n = drawFieldSize(this.config, this.rng.next());
     const now = Date.now();
     this.bonanza = null;
     this.winner = null;
@@ -618,7 +693,6 @@ export class GameClient {
       // rather than blinking into existence fully populated.
       this.arrivals.set(i, now + this.rng.next() * this.config.timing.lobbyMs * 0.82);
     }
-    this.say("info", `Round ${this.roundId}, lattice forming`, `${this.config.entry} ◎`);
     // Auto-entry walks in the moment the lobby opens, wallet permitting.
     if (this.auto.enabled) this.join();
     this.emit();
@@ -656,20 +730,10 @@ export class GameClient {
       this.names.set(YOU_ID, "YOU");
       this.lobbyEntrants.push({ id: YOU_ID, strategyId: "you", strategy: () => false });
     }
-    // Immortal test chamber: no crowding, no creep, no floor. A round in
-    // which nobody can be eliminated, ended via skip or extraction.
-    const cfg = this.dev.immortal
-      ? {
-          ...this.config,
-          hazard: { ...this.config.hazard, q0: 0, creep: 0, qMin: 0 },
-        }
-      : this.config;
-    this.roundImmortal = this.dev.immortal;
-    this.roundRules = cfg;
-    this.round = new Round(cfg, rngFromSeedHex(this.roundSeedHex), this.lobbyEntrants);
+    this.roundRules = this.config;
+    this.round = new Round(this.config, rngFromSeedHex(this.roundSeedHex), this.lobbyEntrants);
     this.phase = "live";
-    this.nextTickAt = Date.now() + this.config.timing.tickMs / this.dev.speed;
-    this.say("seal", `Lattice sealed: ${this.lobbyEntrants.length} plates`);
+    this.nextTickAt = Date.now() + this.config.timing.tickMs;
     sfxSeal();
     this.emit();
   }
@@ -690,21 +754,10 @@ export class GameClient {
       if (was === p.outcome) continue;
       if (p.outcome === "dead") {
         deaths++;
-        if (p.id === YOU_ID) {
-          youDied = true;
-          this.say("you", "Your plate shattered", "0.00×");
-        }
-      } else if (p.outcome === "cashed") {
-        const m = p.cashedOut / this.config.entry;
-        this.say(
-          p.id === YOU_ID ? "you" : "cash",
-          `${this.names.get(p.id) ?? "player"} extracted`,
-          `${m.toFixed(2)}×`,
-        );
+        if (p.id === YOU_ID) youDied = true;
       }
     }
     if (deaths > 0) {
-      this.say("death", `${deaths} shattered`, `${this.currentMultiplier().toFixed(2)}×`);
       sfxShatter(deaths);
     } else {
       // The forward-looking rate, matching every visual. `round.hazard` is the
@@ -712,7 +765,7 @@ export class GameClient {
       // seams cool instantly while the next tick still *sounds* like the
       // pre-shatter danger — the two channels riskScale exists to unify,
       // disagreeing for one tick after every death wave.
-      sfxTick(this.dev.hazardOverride ?? this.forwardHazard());
+      sfxTick(this.forwardHazard());
     }
     if (youDied) sfxYouDied();
 
@@ -784,7 +837,6 @@ export class GameClient {
         this.rakebackClaimed = owed;
         this.revStreamedLifetime += delta;
         this.stats.revEarned = this.revStreamedLifetime;
-        this.say("info", "Rakeback streamed", `+${delta.toFixed(4)} ◎`);
       }
 
       // The winner scene's subject: the last one standing, or when the ice
@@ -820,20 +872,23 @@ export class GameClient {
         joined: this.joined,
         yourOutcome: !you ? "none" : you.outcome === "cashed" ? "cashed" : "dead",
         yourMultiple: you ? you.cashedOut / this.config.entry : null,
+        yourSeat: you ? YOU_ID : null,
         bestMultiple: best,
         commit: this.roundCommit,
+        observedCommit: this.roundCommit,
         seedHex: this.roundSeedHex,
         verified: null,
         seedOk: null,
         replayOk: null,
         rulesOk: null,
+        bonanzaOk: null,
+        payoutOk: null,
         record: {
           seedHex: this.roundSeedHex,
           config: this.roundRules ?? this.config,
           entrantIds: res.players.map((p) => p.id),
           cashOuts: res.cashOuts,
         },
-        immortal: this.roundImmortal,
         digest: outcomeDigest(res),
         winnerChar: this.winner?.charId ?? null,
         winnerYou: this.winner?.you ?? false,
@@ -842,10 +897,22 @@ export class GameClient {
     }
     this.phase = "result";
     this.phaseEnd = Date.now() + this.config.timing.resultMs;
-    this.say("info", "Lattice cleared");
     this.rollBonanza();
     this.saveState();
     this.emit();
+  }
+
+  /**
+   * Folds the jackpot draw into the round's record. The roll happens after the
+   * history entry is built (the pool has to be funded by the round first), so
+   * the record is patched rather than rebuilt — the entry is still the object
+   * verifyRound will later replay.
+   */
+  private recordBonanza(winnerId: number | null): void {
+    const draws = this.jackpot.lastDraws;
+    const entry = this.history[0];
+    if (!draws || !entry || entry.roundId !== this.roundId) return;
+    entry.record.bonanza = { ...draws, winnerId };
   }
 
   private saveState(): void {
@@ -876,33 +943,20 @@ export class GameClient {
    * The jackpot draw, through the engine's pool: fires on the per-round
    * chance, picks the winner weighted by every ticket accrued since the last
    * fire — including players sitting this round out — then wipes all tickets.
-   * The dev overrides rig only the fire check, never the winner selection.
    */
   private rollBonanza(): void {
-    const odds = this.dev.bonanzaOdds ?? this.config.bonanza.fireProb;
-    const force = this.forceBonanza;
-    this.forceBonanza = false;
-
-    let firstDraw = true;
-    const rig: Rng = {
-      next: () => {
-        if (firstDraw) {
-          firstDraw = false;
-          if (force) return 0;
-          // Map the override odds onto the pool's own fireProb comparison.
-          return this.rng.next() < odds ? 0 : 0.9999999;
-        }
-        return this.rng.next();
-      },
-    };
-
-    const fire = this.jackpot.roll(rig);
+    // Off the committed seed, on its own tagged stream — never off the
+    // presentation RNG. The jackpot is the biggest single payout in the game
+    // and must be as checkable as any elimination.
+    const fire = this.jackpot.roll(deriveRng(this.roundSeedHex, BONANZA_TAG));
+    this.recordBonanza(fire?.winnerId ?? null);
     if (!fire) return;
 
     const youWon = fire.winnerId === YOU_ID;
     if (youWon) {
       this.wallet += fire.amount;
       this.session += fire.amount;
+      this.stats.bonanzaWon = (this.stats.bonanzaWon ?? 0) + fire.amount;
     }
     this.bonanza = {
       amount: fire.amount,
@@ -910,12 +964,6 @@ export class GameClient {
       youWon,
       at: Date.now(),
     };
-    this.say(
-      "bonanza",
-      youWon ? "★ YOU TOOK THE BONANZA ★" : `★ BONANZA: ${this.bonanza.winner} ★`,
-      `${fire.amount.toFixed(2)} ◎`,
-    );
-
     sfxBonanza();
     // The jackpot sequence needs room to play out before the next lobby.
     this.phaseEnd = Date.now() + this.config.timing.bonanzaMs;
@@ -936,18 +984,6 @@ export class GameClient {
     this.emit();
   }
 
-  /** Testing hooks. */
-  triggerBonanza(): void {
-    this.forceBonanza = true;
-    if (this.phase === "result") this.rollBonanza();
-    this.emit();
-  }
-
-  setDev(patch: Partial<DevSettings>): void {
-    this.dev = { ...this.dev, ...patch };
-    this.emit();
-  }
-
   setCharacter(id: string): void {
     this.charId = charById(id).id;
     this.saveState();
@@ -965,21 +1001,6 @@ export class GameClient {
     this.emit();
   }
 
-  skipPhase(): void {
-    this.phaseEnd = Date.now();
-    if (this.phase === "live") {
-      // Collapse the round by settling everyone still inside.
-      const round = this.round;
-      if (round) {
-        for (const p of round.players) {
-          if (p.outcome === "in") round.cashOut(p.id);
-        }
-        this.finish();
-      }
-    }
-    this.emit();
-  }
-
   join(): void {
     if (this.phase !== "lobby" || this.joined) return;
     if (this.wallet < this.config.entry) return;
@@ -987,7 +1008,6 @@ export class GameClient {
     this.joined = true;
     this.stats.roundsPlayed++;
     this.stats.wagered += this.config.entry;
-    this.say("you", "You bonded into the lattice", `-${this.config.entry} ◎`);
     sfxJoin();
     this.emit();
   }
@@ -997,7 +1017,6 @@ export class GameClient {
     if (!round || this.phase !== "live") return;
     const got = round.cashOut(YOU_ID);
     if (got === null) return;
-    this.say("you", "You extracted", `${(got / this.config.entry).toFixed(2)}×`);
     sfxExtract();
     if (round.finished) this.finish();
     else this.emit();
@@ -1095,10 +1114,7 @@ export class GameClient {
       ? Math.max(0, cfg.hazard.graceTicks - round.currentTick)
       : cfg.hazard.graceTicks;
 
-    const realHazard = this.forwardHazard();
-    // Dev override rigs only the display; the actual rolls are untouched.
-    const hazard =
-      this.phase === "live" ? (this.dev.hazardOverride ?? realHazard) : realHazard;
+    const hazard = this.forwardHazard();
 
     return {
       phase: this.phase,
@@ -1136,14 +1152,12 @@ export class GameClient {
       winner: this.winner,
       teamWins: this.teamWins,
       tickets: this.ticketStandings(),
-      log: this.log,
       history: this.history,
       nextCommit: this.roundCommit,
       auto: this.auto,
       stats: this.stats,
       online: 1,
       connected: true,
-      dev: this.dev,
     };
   }
 }

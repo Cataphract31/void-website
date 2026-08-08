@@ -12,8 +12,14 @@ import type { Snapshot } from "@/game/client";
  */
 export function StatsPanel({ snap }: { snap: Snapshot }): JSX.Element {
   const s = snap.stats;
-  const net = s.returned + s.revEarned - s.wagered;
-  const rtp = s.wagered > 0 ? ((s.returned + s.revEarned) / s.wagered) * 100 : 0;
+  // Jackpot wins are booked to the balance, never to `returned` — so this
+  // panel used to leave them out of "net result" and RTP entirely while the
+  // top bar's session counter included them. After a fire the two disagreed
+  // by the whole pool, permanently. Counted here as their own line.
+  const bonanzaWon = s.bonanzaWon ?? 0;
+  const paid = s.returned + s.revEarned + bonanzaWon;
+  const net = paid - s.wagered;
+  const rtp = s.wagered > 0 ? (paid / s.wagered) * 100 : 0;
   const hitRate = s.roundsPlayed > 0 ? (s.roundsWon / s.roundsPlayed) * 100 : 0;
 
   const row = (label: string, value: string, color?: string): JSX.Element => (
@@ -48,6 +54,8 @@ export function StatsPanel({ snap }: { snap: Snapshot }): JSX.Element {
         {row("total wagered", `${s.wagered.toFixed(3)} ◎`)}
         {row("total returned", `${s.returned.toFixed(3)} ◎`)}
         {row("rakeback earned", `+${s.revEarned.toFixed(4)} ◎`, "var(--color-cyan)")}
+        {bonanzaWon > 0 &&
+          row("bonanza won", `+${bonanzaWon.toFixed(3)} ◎`, "var(--color-gold)")}
         {row("rounds played", String(s.roundsPlayed))}
         {row(
           "rounds in profit",

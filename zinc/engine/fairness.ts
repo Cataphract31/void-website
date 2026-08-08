@@ -1,5 +1,5 @@
 import type { GameConfig } from "./config.js";
-import { mulberry32, rngFromSeedHex } from "./rng.js";
+import { deriveRng, mulberry32, rngFromSeedHex } from "./rng.js";
 import { Round, type CashOutRecord, type Entrant, type RoundResult } from "./round.js";
 
 /**
@@ -44,6 +44,20 @@ export interface RoundRecord {
   /** Entrants in seal order. Order matters: it fixes RNG draw order. */
   entrantIds: number[];
   cashOuts: CashOutRecord[];
+  /**
+   * The jackpot draw this round made, on the seed-derived "bonanza" stream.
+   * Recorded so the single largest payout in the game is checkable too: with
+   * the seed revealed, anyone recomputes these two numbers and sees whether
+   * the fire — and the point in the ticket ordering the winner was taken
+   * from — was the one the pre-published commitment already fixed.
+   */
+  bonanza?: {
+    fire: number;
+    winner: number;
+    totalTickets: number;
+    /** Seat/ledger id paid, or null when the roll held. */
+    winnerId: number | null;
+  };
 }
 
 /**
@@ -94,6 +108,11 @@ export function replayRound(config: GameConfig, rec: RoundRecord): RoundResult {
   // Rounds recorded before the seed was widened still have to stay verifiable,
   // so the legacy 32-bit path survives here — and only here. Nothing live may
   // produce one: `rngFromSeedHex` refuses a short seed at the source.
+  // A record with no seed of any kind cannot be replayed, and silently
+  // substituting seed 0 would produce a confident, entirely fictional round.
+  if (rec.seedHex === undefined && rec.seed === undefined) {
+    throw new Error("round record carries no seed: nothing to replay");
+  }
   const rng =
     rec.seedHex !== undefined
       ? rngFromSeedHex(rec.seedHex)
@@ -105,6 +124,29 @@ export function replayRound(config: GameConfig, rec: RoundRecord): RoundResult {
     for (const id of manualByTick.get(round.currentTick) ?? []) round.cashOut(id);
   }
   return round.result();
+}
+
+/**
+ * The stream tag the jackpot draw runs on. One name, exported, because the
+ * server and the verifier deriving it from different literals would fail
+ * every honest round.
+ */
+export const BONANZA_TAG = "bonanza";
+
+/**
+ * Recomputes the jackpot draws for a round from its revealed seed and checks
+ * them against what was recorded. Returns null when the round predates the
+ * recorded jackpot draw — there is nothing to check, and claiming otherwise
+ * would be the lie the whole panel exists to prevent.
+ */
+export function verifyBonanzaDraw(rec: RoundRecord): boolean | null {
+  if (!rec.bonanza || rec.seedHex === undefined) return null;
+  const rng = deriveRng(rec.seedHex, BONANZA_TAG);
+  const fire = rng.next();
+  const winner = rng.next();
+  // Exact equality: both sides run the identical integer-only generator, so
+  // any difference at all means the recorded draw is not the committed one.
+  return fire === rec.bonanza.fire && winner === rec.bonanza.winner;
 }
 
 /**

@@ -33,7 +33,13 @@ export function BonanzaOverlay({ event }: { event: BonanzaEvent | null }): JSX.E
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [event]);
+    // Keyed on the fire's timestamp, not the event object. In networked play
+    // every server push builds a fresh `bonanza` object, so an identity key
+    // re-ran this effect several times a second for the whole result phase:
+    // elapsed was reset before it ever left the intro, and the celebration
+    // sawtoothed instead of playing. `at` is stable for one fire and distinct
+    // between two.
+  }, [event?.at]);
 
   if (!event) return null;
 

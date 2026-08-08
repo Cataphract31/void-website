@@ -42,8 +42,12 @@ function IconButton({
  */
 function VolumePopover(): JSX.Element {
   const [open, setOpen] = useState(false);
-  const [off, setOff] = useState(() => loadMutePreference());
   const [level, setLevel] = useState(() => getVolume());
+  const [muteFlag, setMuteFlag] = useState(() => loadMutePreference());
+  // One definition of "silent", used by the icon, the label and the toggle.
+  // These were three different expressions, so the button could read "Unmute"
+  // and mute, or show 🔊 over a game whose volume was zero.
+  const silent = muteFlag || level === 0;
 
   return (
     <div className="relative">
@@ -54,7 +58,7 @@ function VolumePopover(): JSX.Element {
           setOpen((o) => !o);
         }}
       >
-        {off ? "\u{1F507}" : "\u{1F50A}"}
+        {silent ? "\u{1F507}" : "\u{1F50A}"}
       </IconButton>
 
       {open && (
@@ -65,27 +69,43 @@ function VolumePopover(): JSX.Element {
             <div className="flex items-center gap-2.5">
               <button
                 onClick={() => {
-                  const next = !isMuted();
-                  setMuted(next);
-                  setOff(next);
+                  if (silent) {
+                    // Restore audibility whichever way it was lost — flipping
+                    // only the mute flag on a zero volume leaves the icon
+                    // claiming sound while the game stays silent.
+                    setMuted(false);
+                    setMuteFlag(false);
+                    if (level === 0) {
+                      setVolume(0.7);
+                      setLevel(0.7);
+                    }
+                  } else {
+                    setMuted(true);
+                    setMuteFlag(true);
+                  }
                 }}
-                aria-label={off ? "Unmute" : "Mute"}
+                aria-label={silent ? "Unmute" : "Mute"}
                 className="text-[15px] leading-none"
               >
-                {off ? "\u{1F507}" : "\u{1F50A}"}
+                {silent ? "\u{1F507}" : "\u{1F50A}"}
               </button>
               <input
                 type="range"
                 min={0}
                 max={1}
                 step={0.02}
-                value={off ? 0 : level}
+                value={muteFlag ? 0 : level}
                 aria-label="Volume"
                 onChange={(e) => {
                   const v = Number(e.target.value);
                   setVolume(v);
                   setLevel(v);
-                  setOff(v === 0 || isMuted());
+                  // Dragging above zero is an unmute in every product that has
+                  // ever had a volume slider.
+                  if (v > 0 && isMuted()) {
+                    setMuted(false);
+                    setMuteFlag(false);
+                  }
                 }}
                 className="w-full accent-[var(--color-cyan)]"
               />
@@ -278,6 +298,7 @@ export function TopBar({
   onShowInfo,
   onShowChars,
   onWalletChange,
+  onShowBank,
 }: {
   snap: Snapshot;
   onShowInfo: () => void;
@@ -285,6 +306,8 @@ export function TopBar({
   /** Networked play authenticates at socket open, so a wallet that connects
       after that needs the handshake re-run or it stays seated as a guest. */
   onWalletChange?: () => void;
+  /** Present only when the server offers banking (real wallet, networked). */
+  onShowBank?: () => void;
 }): JSX.Element {
   return (
     <div className="px-3 py-2">
@@ -309,6 +332,14 @@ export function TopBar({
           >
             <CharArt charId={snap.charId} pose="head" size={22} />
           </button>
+          {onShowBank && (
+            <button
+              onClick={onShowBank}
+              className="label rounded-sm bg-[var(--color-panel2)] px-2.5 py-1.5 text-[var(--color-profit)] hover:text-[var(--color-text)]"
+            >
+              bank
+            </button>
+          )}
           <WalletButton onChange={onWalletChange} />
           <IconButton label="How it works" onClick={onShowInfo}>
             ⓘ
@@ -431,6 +462,12 @@ export function ActionBar({
   if (snap.phase === "lobby") {
     if (snap.you.joined) {
       label = `Bonded, sealing in ${secs}s`;
+    } else if (snap.wallet < snap.entry) {
+      // Both clients drop a join they cannot fund, and the server's refusal
+      // reaches the browser as a console warning nobody sees. A full-colour
+      // primary CTA that silently does nothing is the worst thing the money
+      // button can do, so it says why instead.
+      label = "Not enough balance";
     } else {
       label = `Bond in · ${snap.entry.toFixed(3)} ◎`;
       action = onJoin;

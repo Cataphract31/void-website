@@ -48,10 +48,15 @@ export function Roster({
                   ? "var(--color-cyan)"
                   : "var(--color-text)";
           return (
-            <div
+            /* A real button, not a clickable div: this is the only way to open
+               a player card, and as a bare div it was unreachable by keyboard
+               and invisible to a screen reader. */
+            <button
               key={p.id}
+              type="button"
               onClick={() => onSelect?.(p.id)}
-              className="absolute left-0 flex w-full cursor-pointer items-center gap-2 px-1 text-[11.5px] hover:bg-[var(--color-panel2)]"
+              aria-label={`Open ${p.name}`}
+              className="absolute left-0 flex w-full cursor-pointer items-center gap-2 px-1 text-left text-[11.5px] hover:bg-[var(--color-panel2)] focus-visible:bg-[var(--color-panel2)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-cyan)]"
               style={{ height: item.size, transform: `translateY(${item.start}px)` }}
             >
               <CharHead charId={p.charId} outcome={p.outcome} />
@@ -75,7 +80,7 @@ export function Roster({
               >
                 {p.outcome === "dead" ? "0.00×" : `${p.multiple.toFixed(2)}×`}
               </span>
-            </div>
+            </button>
           );
         })}
       </div>
