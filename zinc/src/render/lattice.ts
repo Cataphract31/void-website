@@ -1,6 +1,7 @@
 import { CellAtlas, hexPath, type CellState } from "./cells";
 import { TILE_TURN, TileAtlas, tileVersion, type TileName } from "./tiles";
 import { riskScale } from "@/game/risk";
+import { charImage } from "@/game/chars";
 
 /**
  * The seam.
@@ -38,6 +39,8 @@ export interface CellInput {
    * groups apart at column boundaries.
    */
   group?: string;
+  /** Banked multiple, set only on cashed plates. Printed on the plate. */
+  multiple?: number;
 }
 
 export interface LatticeSnapshot {
@@ -49,6 +52,8 @@ export interface LatticeSnapshot {
   bonanzaAt: number | null;
   /** Your own standing. Drives the personal hit when your round ends. */
   youOutcome: "out" | "in" | "cashed" | "dead";
+  /** Your character. Your plates alone wear its head on the board. */
+  youCharId: string;
 }
 
 interface Cell {
@@ -64,6 +69,8 @@ interface Cell {
   born: number;
   /** Owner rim tint for multi-plate clusters. See CellInput.hue. */
   hue?: number;
+  /** Banked multiple on cashed plates. See CellInput.multiple. */
+  multiple?: number;
 }
 
 interface Shard {
@@ -131,6 +138,7 @@ export class LatticeRenderer {
     phase: "lobby",
     bonanzaAt: null,
     youOutcome: "out",
+    youCharId: "",
   };
   /** Your last known standing, so the moment it changes can be staged. */
   private youWas: LatticeSnapshot["youOutcome"] = "out";
@@ -305,9 +313,10 @@ export class LatticeRenderer {
     for (const input of snap.cells) {
       const cell = this.cells.get(input.id);
       if (!cell) continue;
-      // Rim tint refreshes every push, before the state short-circuit — it is
-      // display-only and must never depend on a state change to arrive.
+      // Rim tint and banked multiple refresh every push, before the state
+      // short-circuit — display-only, must never wait on a state change.
       cell.hue = input.hue;
+      cell.multiple = input.multiple;
       if (cell.state === input.state) continue;
       cell.state = input.state;
       cell.t = 0;
@@ -599,6 +608,7 @@ export class LatticeRenderer {
         seed: ((input.id * 2654435761) >>> 0) / 4294967296,
         born: prev?.born ?? 0,
         hue: input.hue,
+        multiple: input.multiple,
       });
     }
     this.cells = kept;
@@ -1087,6 +1097,46 @@ export class LatticeRenderer {
         }
       }
 
+      // YOUR plates alone wear your character's head. The whole field wore
+      // heads once and nobody liked it at any size — but one face, yours, on
+      // your own cluster is identity rather than noise, and it makes "which
+      // plates are mine" answerable without reading rims at all.
+      if (c.state === "you" && this.radius > 7) {
+        const face = charImage(this.snap.youCharId, "head");
+        if (face) {
+          const side = this.radius * 1.16 * scale;
+          ctx.save();
+          ctx.globalAlpha = alpha * 0.95;
+          // Crunchy, like every other blit of the pixel art.
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(face, c.x - side / 2 + jx, c.y - side / 2 + jy + dy, side, side);
+          ctx.restore();
+          ctx.globalAlpha = alpha;
+        }
+      }
+
+      // An exited plate is BANKED money, not a casualty: it holds its ground
+      // in gold with the multiple it left at printed on the ice, so "got out
+      // with 2.3×" and "went under" can never be confused at a glance.
+      if (c.state === "cashed") {
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        hexPath(ctx, c.x + jx, c.y + jy + dy, this.radius * scale * 0.94);
+        ctx.fillStyle = "rgba(255, 205, 110, 0.09)";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255, 211, 107, 0.55)";
+        ctx.lineWidth = Math.max(1, this.radius * 0.06);
+        ctx.stroke();
+        if (c.multiple !== undefined && this.radius > 8) {
+          ctx.font = `600 ${Math.max(9, Math.round(this.radius * 0.42))}px "IBM Plex Mono", ui-monospace, monospace`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = "#ffd36b";
+          ctx.fillText(`${c.multiple.toFixed(2)}×`, c.x + jx, c.y + jy + dy);
+        }
+        ctx.restore();
+      }
+
       // Owner rim: a multi-plate wallet's cluster shares one tinted outline,
       // so a stack reads as one holding instead of coincidentally similar
       // neighbours. Thin and dim on purpose — it labels, it does not compete
@@ -1142,7 +1192,58 @@ export class LatticeRenderer {
         ctx.restore();
       }
     }
+    this.drawYouTag();
     ctx.globalAlpha = 1;
+  }
+
+  /**
+   * One floating marker over your whole holding. The per-plate cyan rims say
+   * "these plates are special"; this says WHOSE they are and how many, which
+   * multi-buy made ambiguous — a two-plate stack next to an owner-rimmed bot
+   * cluster read as just another cluster until you hunted for the cyan. The
+   * count falls as your plates die, so the tag doubles as a live stack gauge.
+   */
+  private drawYouTag(): void {
+    if (this.radius <= 5 || this.snap.phase === "result") return;
+    const { ctx } = this;
+    let n = 0;
+    let sx = 0;
+    let topY = Infinity;
+    for (const c of this.cells.values()) {
+      if (c.state !== "you") continue;
+      n++;
+      sx += c.x;
+      if (c.y < topY) topY = c.y;
+    }
+    if (n === 0) return;
+
+    const cx = sx / n;
+    const fs = Math.max(11, Math.min(17, this.radius * 0.55));
+    const bob = Math.sin(this.time * 2.6) * 1.6;
+    // Above the topmost plate of the cluster, clamped so a top-row cluster
+    // keeps the tag on screen instead of clipping it at the frame edge.
+    const y = Math.max(fs + 10, topY - this.radius * 1.32) + bob;
+    const label = n > 1 ? `YOU ×${n}` : "YOU";
+
+    ctx.save();
+    ctx.font = `700 ${fs}px "Chakra Petch", ui-sans-serif, system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    // Dark halo, not a chip: keeps the chrome boxless while staying legible
+    // over pale ice and hot seams alike.
+    ctx.shadowColor = "rgba(2, 12, 18, 0.95)";
+    ctx.shadowBlur = 5;
+    ctx.fillStyle = "#3fe0d8";
+    ctx.fillText(label, cx, y - 4);
+    // Chevron pointing down into the cluster.
+    const cw = fs * 0.34;
+    ctx.beginPath();
+    ctx.moveTo(cx - cw, y);
+    ctx.lineTo(cx + cw, y);
+    ctx.lineTo(cx, y + cw * 1.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
   }
 
   /** Broken ore in flight. Value shards home in on the multiplier. */
