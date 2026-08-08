@@ -184,6 +184,8 @@ export interface Snapshot {
   wallet: number;
   session: number;
   bonanzaPool: number;
+  /** Rounds finished since the jackpot last fired: the drought counter. */
+  bonanzaDrought: number;
   bonanzaTickets: number;
   revShareTickets: number;
   /** Set for a few seconds after the jackpot fires, then cleared. */
@@ -563,6 +565,8 @@ export class GameClient {
 
   private bonanza: BonanzaEvent | null = null;
   private winner: WinnerInfo | null = null;
+  /** Round the demo jackpot last fired in, for the drought counter. */
+  private lastFireRound = 0;
   /** Set when the round ended because one owner held every live plate. */
   private soleOwnerKey: string | null = null;
   /** Demo chat is an echo chamber — there is nobody on the other end. */
@@ -1001,14 +1005,20 @@ export class GameClient {
         if (mult >= 1) this.stats.roundsWon++;
       }
 
-      // The winner scene's subject: the last one standing, or when the ice
-      // took everyone before a sole survivor emerged, the best extraction.
+      // The winner scene's subject, same crown priority as the server: the
+      // engine's survivor; else a sole-owner ending's owner; else the best
+      // extraction with ties going to the longest stander, so the face on
+      // the scene matches the plates still visibly up on the board.
       // A total wipe (nobody banked anything) leaves no winner at all.
+      const cashedPlayers = res.players.filter((p) => p.outcome === "cashed");
       const champ =
         res.players.find((p) => p.lastStanding) ??
-        [...res.players]
-          .filter((p) => p.outcome === "cashed")
-          .sort((a, b) => b.cashedOut - a.cashedOut)[0];
+        (this.soleOwnerKey !== null
+          ? cashedPlayers.find((p) => this.ownerOf(p.id) === this.soleOwnerKey)
+          : undefined) ??
+        [...cashedPlayers].sort(
+          (a, b) => b.cashedOut - a.cashedOut || b.ticksSurvived - a.ticksSurvived,
+        )[0];
       // Distinct owners at the champion's exact extraction — same rule as
       // the server: a shared top exit renders "dead heat", never a coin-flip
       // "best", and one owner's multi-plate cash-out never ties itself.
@@ -1148,6 +1158,7 @@ export class GameClient {
       this.session += fire.amount;
       this.stats.bonanzaWon = (this.stats.bonanzaWon ?? 0) + fire.amount;
     }
+    this.lastFireRound = this.roundId;
     this.bonanza = {
       amount: fire.amount,
       winner: this.names.get(fire.winnerId) ?? "a ticket holder",
@@ -1461,6 +1472,7 @@ export class GameClient {
       wallet: this.wallet,
       session: this.session,
       bonanzaPool: this.jackpot.pool,
+      bonanzaDrought: Math.max(0, this.roundId - this.lastFireRound),
       bonanzaTickets: this.jackpot.ticketsOf(YOU_ID),
       revShareTickets: this.revShare.lifetimeOf(YOU_ID),
       bonanza: this.bonanza,
