@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <title>CURSORS.EXE</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-  <script type="module" crossorigin src="./assets/index-I2QEyykZ.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-BTt6MJur.css">
+  <script type="module" crossorigin src="./assets/index-DDZwGBwk.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-BoSwH-YR.css">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute">
@@ -393,10 +393,17 @@ icons/sounds: winXP (MIT)</div>
         <img id="ie-linksi" alt=""><b>Links</b>
         <a data-go="http://www.hotmail.com/">Free Hotmail</a>
         <a data-go="http://windowsupdate.microsoft.com/">Windows Update</a>
-        <a data-go="http://www.cursorwebring.org/">The Cursor Webring</a>
+        <a data-go="http://tv.cursor.land/">cursorTV</a>
+        <a data-go="http://gallery.cursor.land/">the gallery</a>
         <a data-go="http://search.msn.com/">Search the Web</a>
       </div>
-      <div class="ie-doc" id="ie-page"></div>
+      <div class="ie-main">
+        <div class="ie-side" id="ie-side" style="display:none">
+          <div class="ie-side-h"><span id="ie-side-title">Favorites</span><i id="ie-side-x">✕</i></div>
+          <div class="ie-side-body" id="ie-side-body"></div>
+        </div>
+        <div class="ie-doc" id="ie-page"></div>
+      </div>
       <div class="ex-status ie-status">
         <span id="ie-st1">Done</span>
         <span class="ie-progcell"><span class="ie-prog" id="ie-prog"><i id="ie-progbar"></i></span></span>
@@ -558,15 +565,19 @@ icons/sounds: winXP (MIT)</div>
       <div class="xpane" id="dp-saver">
         <div class="monframe"><canvas class="scr" id="sv-prev" width="170" height="110"></canvas><div class="foot"></div></div>
         <div class="aprow"><span class="lb">Screen saver</span>
-          <select id="sv-sel" style="flex:1">
-            <option value="stars">Starfield</option>
-            <option value="ribbons">Ribbons</option>
-            <option value="bounce">Bouncing CURSORS</option>
-            <option value="none">(None)</option>
-          </select>
+          <select id="sv-sel" style="flex:1"></select>
         </div>
-        <div class="aprow"><span class="lb">Wait</span><input type="number" id="sv-wait" min="1" max="60" value="3" style="width:52px"> <span class="small dim">minutes, then the desktop dreams</span></div>
-        <div style="text-align:right;margin-top:6px"><button class="xbtn" id="sv-test">Preview</button></div>
+        <div style="display:flex;gap:6px;justify-content:flex-end;margin:4px 0">
+          <button class="xbtn" id="sv-settings" style="min-width:74px">Settings...</button>
+          <button class="xbtn" id="sv-test" style="min-width:74px">Preview</button>
+        </div>
+        <div class="aprow"><span class="lb">Wait</span><input type="number" id="sv-wait" min="1" max="60" value="3" style="width:52px"> <span class="small dim">minutes</span>
+          <label style="display:flex;gap:5px;align-items:center;margin-left:8px"><input type="checkbox" id="sv-pass"> <span class="small">On resume, password protect</span></label>
+        </div>
+        <fieldset class="mo-fs" style="margin-top:7px"><legend>Monitor power</legend>
+          <div class="small dim" style="margin-bottom:4px">To adjust monitor power settings and save energy, click Power.</div>
+          <div style="text-align:right"><button class="xbtn" disabled style="min-width:74px">Power...</button></div>
+        </fieldset>
       </div>
       <div class="xpane" id="dp-app">
         <div class="aprow"><span class="lb">Scheme</span>
@@ -735,6 +746,468 @@ icons/sounds: winXP (MIT)</div>
     </div>
   </div>
 
+  <!-- Calculator -->
+  <div class="window fixed" id="win-calc" tabindex="-1" style="left:calc(50% - 132px);top:120px;width:264px">
+    <div class="title-bar">
+      <div class="tb-l"><i class="xico tb-ico" data-ico="calc16"></i><div class="title-bar-text">Calculator</div></div>
+      <div class="title-bar-controls"><button aria-label="Minimize"></button><button aria-label="Close"></button></div>
+    </div>
+    <div class="win-body pad">
+      <div class="menubar"><span>Edit</span><span>View</span><span>Help</span></div>
+      <div id="calc-display">0</div>
+      <div id="calc-keys"></div>
+    </div>
+  </div>
+
+  <!-- Character Map -->
+  <div class="window fixed" id="win-charmap" style="left:calc(50% - 190px);top:70px;width:380px">
+    <div class="title-bar">
+      <div class="tb-l"><i class="xico tb-ico" data-ico="note16"></i><div class="title-bar-text">Character Map</div></div>
+      <div class="title-bar-controls"><button aria-label="Minimize"></button><button aria-label="Close"></button></div>
+    </div>
+    <div class="win-body pad">
+      <div class="aprow"><span class="lb">Font:</span><select id="cm-font" style="flex:1"></select></div>
+      <div id="cm-grid"></div>
+      <div class="aprow" style="margin-top:6px">
+        <span class="lb">Characters to copy:</span>
+        <input type="text" id="cm-copybuf" style="flex:1" spellcheck="false">
+        <button class="xbtn" id="cm-select" style="min-width:58px">Select</button>
+        <button class="xbtn" id="cm-copy" style="min-width:52px">Copy</button>
+      </div>
+      <div class="small dim" id="cm-status" style="margin-top:4px">U+0041: A</div>
+    </div>
+  </div>
+
+  <!-- Disk Defragmenter -->
+  <div class="window" id="win-defrag" data-minw="480" data-minh="300" style="left:180px;top:90px;width:600px;height:380px">
+    <div class="title-bar">
+      <div class="tb-l"><i class="xico tb-ico" data-ico="@ic-mmc"></i><div class="title-bar-text">Disk Defragmenter</div></div>
+      <div class="title-bar-controls"><button aria-label="Minimize"></button><button aria-label="Close"></button></div>
+    </div>
+    <div class="win-body pad">
+      <div class="menubar"><span>File</span><span>Action</span><span>View</span><span>Help</span></div>
+      <div style="border:1px solid #ACA899;background:#fff;padding:4px 8px;margin-bottom:6px;font-size:11px" id="df-vol"></div>
+      <div class="small dim" style="margin-bottom:2px">Estimated disk usage after defragmentation:</div>
+      <canvas id="df-map" width="560" height="60" style="width:100%;border:1px solid #808080;background:#fff"></canvas>
+      <div style="display:flex;gap:6px;margin:8px 0 6px">
+        <button class="xbtn" id="df-analyze" style="min-width:80px">Analyze</button>
+        <button class="xbtn" id="df-defrag" style="min-width:96px">Defragment</button>
+        <button class="xbtn" disabled style="min-width:64px">Pause</button>
+        <button class="xbtn" disabled style="min-width:60px">Stop</button>
+        <span class="small" id="df-status" style="align-self:center;margin-left:8px"></span>
+      </div>
+      <div style="display:flex;gap:14px;font-size:11px" class="dim">
+        <span><i class="df-sw" style="background:#C83030"></i> Fragmented files</span>
+        <span><i class="df-sw" style="background:#3050C8"></i> Contiguous files</span>
+        <span><i class="df-sw" style="background:#30A040"></i> Unmovable files</span>
+        <span><i class="df-sw" style="background:#fff;border:1px solid #999"></i> Free space</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Registry Editor -->
+  <div class="window" id="win-regedit" data-minw="460" data-minh="280" style="left:150px;top:60px;width:640px;height:420px">
+    <div class="title-bar">
+      <div class="tb-l"><i class="xico tb-ico" data-ico="@ic-file"></i><div class="title-bar-text">Registry Editor</div></div>
+      <div class="title-bar-controls"><button aria-label="Minimize"></button><button aria-label="Close"></button></div>
+    </div>
+    <div class="win-body pad">
+      <div class="menubar"><span>File</span><span>Edit</span><span>View</span><span>Favorites</span><span>Help</span></div>
+      <div class="reg-split">
+        <div id="reg-tree"></div>
+        <div id="reg-vals-wrap">
+          <div class="reg-valhead"><span style="width:44%">Name</span><span style="width:20%">Type</span><span>Data</span></div>
+          <div id="reg-vals"></div>
+        </div>
+      </div>
+      <div class="ex-status" style="margin-top:4px"><span id="reg-status"></span></div>
+    </div>
+  </div>
+
+  <!-- Stretch and Skew: the real four-field dialog -->
+  <div class="window fixed" id="win-stretchskew" style="left:calc(50% - 160px);top:calc(50% - 120px);width:320px">
+    <div class="title-bar">
+      <div class="tb-l"><i class="xico tb-ico" data-ico="paint16"></i><div class="title-bar-text">Stretch and Skew</div></div>
+      <div class="title-bar-controls"><button aria-label="Close"></button></div>
+    </div>
+    <div class="win-body">
+      <fieldset class="mo-fs"><legend>Stretch</legend>
+        <div class="aprow"><span class="lb">Horizontal:</span><input type="number" id="ss-hs" min="1" max="500" value="100" style="width:64px"><span class="small dim">%</span></div>
+        <div class="aprow"><span class="lb">Vertical:</span><input type="number" id="ss-vs" min="1" max="500" value="100" style="width:64px"><span class="small dim">%</span></div>
+      </fieldset>
+      <fieldset class="mo-fs"><legend>Skew</legend>
+        <div class="aprow"><span class="lb">Horizontal:</span><input type="number" id="ss-hd" min="-89" max="89" value="0" style="width:64px"><span class="small dim">degrees</span></div>
+        <div class="aprow"><span class="lb">Vertical:</span><input type="number" id="ss-vd" min="-89" max="89" value="0" style="width:64px"><span class="small dim">degrees</span></div>
+      </fieldset>
+      <div style="display:flex;gap:7px;justify-content:flex-end;margin-top:6px">
+        <button class="xbtn" id="ss-ok" style="min-width:74px">OK</button>
+        <button class="xbtn" id="ss-cancel" style="min-width:74px">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Favorite -->
+  <div class="window fixed" id="win-addfav" style="left:calc(50% - 180px);top:calc(50% - 80px);width:360px">
+    <div class="title-bar">
+      <div class="tb-l"><i class="xico tb-ico" data-ico="ie16"></i><div class="title-bar-text">Add Favorite</div></div>
+      <div class="title-bar-controls"><button aria-label="Close"></button></div>
+    </div>
+    <div class="win-body">
+      <div style="display:flex;gap:9px;align-items:flex-start;padding:4px 2px 10px">
+        <i class="xico" data-ico="ie32" style="width:32px;height:32px;flex:none"></i>
+        <div style="line-height:1.5">Internet Explorer will add this page to your Favorites list.<br>
+        <span class="small dim" id="af-url"></span></div>
+      </div>
+      <div style="display:grid;grid-template-columns:44px 1fr;gap:6px;align-items:center;padding:0 2px 10px">
+        <span>Name:</span><input type="text" id="af-name" spellcheck="false" maxlength="40">
+      </div>
+      <div style="display:flex;gap:7px;justify-content:flex-end">
+        <button class="xbtn" id="af-ok" style="min-width:74px">OK</button>
+        <button class="xbtn" id="af-cancel" style="min-width:74px">Cancel</button>
+        <button class="xbtn" disabled style="min-width:88px">Create in &gt;&gt;</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Organize Favorites -->
+  <div class="window fixed" id="win-orgfav" style="left:calc(50% - 190px);top:calc(50% - 130px);width:380px">
+    <div class="title-bar">
+      <div class="tb-l"><i class="xico tb-ico" data-ico="ie16"></i><div class="title-bar-text">Organize Favorites</div></div>
+      <div class="title-bar-controls"><button aria-label="Close"></button></div>
+    </div>
+    <div class="win-body">
+      <div style="display:flex;gap:8px">
+        <div style="display:flex;flex-direction:column;gap:5px;width:104px;flex:none">
+          <button class="xbtn" disabled>Create Folder</button>
+          <button class="xbtn" id="of-rename">Rename</button>
+          <button class="xbtn" disabled>Move to Folder...</button>
+          <button class="xbtn" id="of-delete">Delete</button>
+          <button class="xbtn" id="of-up">Move Up</button>
+          <button class="xbtn" id="of-down">Move Down</button>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column">
+          <div id="of-list" style="border:1px solid #7F9DB9;background:#fff;height:170px;overflow:auto"></div>
+          <div class="small dim" id="of-info" style="padding:4px 2px;min-height:16px"></div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:6px">
+        <button class="xbtn" id="of-close" style="min-width:74px">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Internet Options: the seven tabs, Advanced tree included -->
+  <div class="window fixed" id="win-inetopts" style="left:calc(50% - 200px);top:44px;width:400px">
+    <div class="title-bar">
+      <div class="tb-l"><i class="xico tb-ico" data-ico="ie16"></i><div class="title-bar-text">Internet Options</div></div>
+      <div class="title-bar-controls"><button aria-label="Close"></button></div>
+    </div>
+    <div class="win-body pad" style="background:#ECE9D8">
+      <div class="xtabs" style="flex-wrap:wrap">
+        <span class="xtab on" data-pane="io-gen">General</span>
+        <span class="xtab" data-pane="io-sec">Security</span>
+        <span class="xtab" data-pane="io-priv">Privacy</span>
+        <span class="xtab" data-pane="io-cont">Content</span>
+        <span class="xtab" data-pane="io-conn">Connections</span>
+        <span class="xtab" data-pane="io-prog">Programs</span>
+        <span class="xtab" data-pane="io-advt">Advanced</span>
+      </div>
+      <div class="xpane on" id="io-gen">
+        <fieldset class="mo-fs"><legend>Home page</legend>
+          <div class="small" style="margin-bottom:4px">You can change which page to use for your home page.</div>
+          <div class="aprow"><span class="lb">Address:</span><input type="text" id="io-home" style="flex:1" spellcheck="false"></div>
+          <div style="display:flex;gap:5px;justify-content:flex-end;margin-top:4px">
+            <button class="xbtn" id="io-usecur" style="min-width:86px">Use Current</button>
+            <button class="xbtn" id="io-usedef" style="min-width:86px">Use Default</button>
+            <button class="xbtn" id="io-useblank" style="min-width:86px">Use Blank</button>
+          </div>
+        </fieldset>
+        <fieldset class="mo-fs"><legend>Temporary Internet files</legend>
+          <div class="small" id="io-cache" style="margin-bottom:5px"></div>
+          <div style="display:flex;gap:5px;justify-content:flex-end">
+            <button class="xbtn" id="io-delcookies" style="min-width:98px">Delete Cookies...</button>
+            <button class="xbtn" id="io-delfiles" style="min-width:86px">Delete Files...</button>
+            <button class="xbtn" disabled style="min-width:74px">Settings...</button>
+          </div>
+        </fieldset>
+        <fieldset class="mo-fs"><legend>History</legend>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span class="small" style="flex:1">Days to keep pages in history:</span>
+            <input type="number" value="20" min="0" max="99" style="width:48px">
+            <button class="xbtn" id="io-clearhist" style="min-width:86px">Clear History</button>
+          </div>
+        </fieldset>
+      </div>
+      <div class="xpane" id="io-sec">
+        <div class="small" style="margin:4px 0 8px">Select a Web content zone to specify its security settings.</div>
+        <div style="display:flex;gap:14px;justify-content:center;padding:8px;border:1px solid #ACA899;background:#fff">
+          <div style="text-align:center"><i class="xico" data-ico="earth16" style="width:31px;height:31px"></i><div class="small"><b>Internet</b></div></div>
+          <div style="text-align:center;opacity:.55"><i class="xico" data-ico="computer32" style="width:31px;height:31px"></i><div class="small">Local intranet</div></div>
+          <div style="text-align:center;opacity:.55"><i class="xico" data-ico="@ic-check" style="width:31px;height:31px"></i><div class="small">Trusted sites</div></div>
+          <div style="text-align:center;opacity:.55"><i class="xico" data-ico="err32" style="width:31px;height:31px"></i><div class="small">Restricted sites</div></div>
+        </div>
+        <fieldset class="mo-fs" style="margin-top:8px"><legend>Security level for this zone</legend>
+          <div style="display:flex;gap:10px;align-items:center">
+            <b>Medium</b>
+            <span class="small dim">Safe browsing and still functional. Prompts before downloading potentially unsafe content. Unsigned ActiveX controls will not be downloaded. Appropriate for most Internet sites.</span>
+          </div>
+        </fieldset>
+      </div>
+      <div class="xpane" id="io-priv">
+        <fieldset class="mo-fs"><legend>Settings</legend>
+          <div style="display:flex;gap:10px">
+            <b style="writing-mode:vertical-lr;transform:rotate(180deg);text-align:center">Medium</b>
+            <span class="small dim">Blocks third-party cookies that do not have a compact privacy policy. Blocks third-party cookies that use personally identifiable information without your implicit consent. Restricts first-party cookies that use personally identifiable information without implicit consent.</span>
+          </div>
+        </fieldset>
+        <div class="small dim" style="padding:2px">This computer sets no cookies. We could not get them working in 2003 and see no reason to start now.</div>
+      </div>
+      <div class="xpane" id="io-cont">
+        <fieldset class="mo-fs"><legend>Content Advisor</legend>
+          <div class="small dim" style="margin-bottom:4px">Ratings help you control the Internet content that can be viewed on this computer.</div>
+          <div style="text-align:right"><button class="xbtn" disabled style="min-width:74px">Enable...</button></div>
+        </fieldset>
+        <fieldset class="mo-fs"><legend>Certificates</legend>
+          <div class="small dim" style="margin-bottom:4px">Use certificates to positively identify yourself, certification authorities, and publishers.</div>
+          <div style="text-align:right"><button class="xbtn" id="io-certs" style="min-width:86px">Certificates...</button></div>
+        </fieldset>
+      </div>
+      <div class="xpane" id="io-conn">
+        <fieldset class="mo-fs"><legend>Dial-up and Virtual Private Network settings</legend>
+          <div style="border:1px solid #7F9DB9;background:#fff;padding:4px 6px;display:flex;gap:7px;align-items:center">
+            <i class="xico" data-ico="connect16" style="width:16px;height:16px"></i><span>cursor$net (Default)</span>
+          </div>
+          <div style="display:flex;gap:5px;justify-content:flex-end;margin-top:5px">
+            <button class="xbtn" disabled style="min-width:64px">Add...</button>
+            <button class="xbtn" disabled style="min-width:74px">Remove</button>
+            <button class="xbtn" id="io-dialset" style="min-width:74px">Settings...</button>
+          </div>
+        </fieldset>
+        <div class="small dim" style="padding:2px">56.6 Kbps. It is not the wires, it is the era.</div>
+      </div>
+      <div class="xpane" id="io-prog">
+        <fieldset class="mo-fs"><legend>Internet programs</legend>
+          <div style="display:grid;grid-template-columns:96px 1fr;gap:5px 8px;align-items:center" class="small">
+            <span>HTML editor:</span><b>Notepad</b>
+            <span>E-mail:</span><b>Windows Messenger</b>
+            <span>Newsgroups:</span><b>Outlook Express</b>
+            <span>Internet call:</span><b>NetMeeting</b>
+            <span>Calendar:</span><b>(none)</b>
+            <span>Contact list:</span><b>Address Book</b>
+          </div>
+        </fieldset>
+      </div>
+      <div class="xpane" id="io-advt">
+        <div class="small" style="margin:2px 0 4px">Settings:</div>
+        <div id="io-adv" style="border:1px solid #7F9DB9;background:#fff;height:218px;overflow:auto;padding:2px 4px"></div>
+        <div class="small dim" style="margin-top:3px">Entries marked with a working switch actually do something. The rest are exactly as load-bearing as they were in 2003.</div>
+      </div>
+      <div style="display:flex;gap:7px;justify-content:flex-end;margin-top:8px">
+        <button class="xbtn" id="io-ok" style="min-width:74px">OK</button>
+        <button class="xbtn" id="io-cancel" style="min-width:74px">Cancel</button>
+        <button class="xbtn" disabled style="min-width:74px">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- per-screensaver Settings dialog: content built by main.js -->
+  <div class="window fixed" id="win-saveropts" style="left:calc(50% - 160px);top:calc(50% - 90px);width:320px">
+    <div class="title-bar">
+      <div class="tb-l"><div class="title-bar-text">Settings</div></div>
+      <div class="title-bar-controls"><button aria-label="Close"></button></div>
+    </div>
+    <div class="win-body">
+      <div id="svo-body"></div>
+      <div style="display:flex;gap:7px;justify-content:flex-end;margin-top:10px">
+        <button class="xbtn" id="svo-ok" style="min-width:74px">OK</button>
+        <button class="xbtn" id="svo-cancel" style="min-width:74px">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mouse Properties: main.cpl, all five tabs -->
+  <div class="window fixed" id="win-mouse" style="left:calc(50% - 190px);top:52px;width:380px">
+    <div class="title-bar">
+      <div class="tb-l"><i class="xico tb-ico" data-ico="cpanel16"></i><div class="title-bar-text">Mouse Properties</div></div>
+      <div class="title-bar-controls"><button aria-label="Close"></button></div>
+    </div>
+    <div class="win-body pad" style="background:#ECE9D8">
+      <div class="xtabs">
+        <span class="xtab on" data-pane="mo-btn">Buttons</span>
+        <span class="xtab" data-pane="mo-ptr">Pointers</span>
+        <span class="xtab" data-pane="mo-opt">Pointer Options</span>
+        <span class="xtab" data-pane="mo-whl">Wheel</span>
+        <span class="xtab" data-pane="mo-hw">Hardware</span>
+      </div>
+      <div class="xpane on" id="mo-btn">
+        <fieldset class="mo-fs"><legend>Button configuration</legend>
+          <label style="display:flex;gap:6px;align-items:flex-start"><input type="checkbox" id="mo-swap"> <span>Switch primary and secondary buttons</span></label>
+          <div class="small dim" style="margin:4px 0 2px 20px">Select this check box to make the button on the right the one you use for primary functions such as selecting and dragging.</div>
+        </fieldset>
+        <fieldset class="mo-fs"><legend>Double-click speed</legend>
+          <div style="display:flex;gap:10px;align-items:center">
+            <div style="flex:1">
+              <div class="small">Double-click the folder to test your setting. If the folder does not open or close, try using a slower setting.</div>
+              <div class="aprow" style="margin-top:6px"><span class="small">Speed:&nbsp;Slow</span><input type="range" id="mo-dspeed" min="1" max="11" value="6" style="flex:1"><span class="small">Fast</span></div>
+            </div>
+            <div id="mo-dctest" style="width:44px;height:44px;flex:none;display:grid;place-items:center;border:1px solid #ACA899;background:#fff"></div>
+          </div>
+        </fieldset>
+        <fieldset class="mo-fs"><legend>ClickLock</legend>
+          <div style="display:flex;gap:8px;align-items:center">
+            <label style="display:flex;gap:6px;flex:1"><input type="checkbox" id="mo-clklock"> <span>Turn on ClickLock</span></label>
+            <button class="xbtn" disabled style="min-width:74px">Settings...</button>
+          </div>
+          <div class="small dim" style="margin:4px 0 0 20px">Enables you to highlight or drag without holding down the mouse button.</div>
+        </fieldset>
+      </div>
+      <div class="xpane" id="mo-ptr">
+        <div style="display:flex;gap:8px;align-items:flex-start">
+          <div style="flex:1">
+            <div class="small dim">Scheme</div>
+            <select id="mo-scheme" style="width:100%"></select>
+            <div style="display:flex;gap:5px;justify-content:flex-end;margin-top:4px">
+              <button class="xbtn" disabled style="min-width:66px">Save As...</button>
+              <button class="xbtn" disabled style="min-width:60px">Delete</button>
+            </div>
+          </div>
+          <div id="mo-prevbox" style="width:56px;height:60px;flex:none;border:1px solid #ACA899;background:#fff;display:grid;place-items:center"></div>
+        </div>
+        <div class="small dim" style="margin:7px 0 2px">Customize:</div>
+        <div id="mo-roles" style="border:1px solid #7F9DB9;background:#fff;height:148px;overflow:auto"></div>
+        <label style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" id="mo-shadow" checked> <span>Enable pointer shadow</span></label>
+        <div style="display:flex;gap:5px;justify-content:flex-end;margin-top:4px">
+          <button class="xbtn" disabled style="min-width:80px">Use Default</button>
+          <button class="xbtn" disabled style="min-width:66px">Browse...</button>
+        </div>
+      </div>
+      <div class="xpane" id="mo-opt">
+        <fieldset class="mo-fs"><legend>Motion</legend>
+          <div class="aprow"><span class="small">Slow</span><input type="range" id="mo-speed" min="1" max="11" value="6" style="flex:1"><span class="small">Fast</span></div>
+          <label style="display:flex;gap:6px;margin:2px 0 0 4px"><input type="checkbox" id="mo-precision" checked> <span>Enhance pointer precision</span></label>
+        </fieldset>
+        <fieldset class="mo-fs"><legend>Snap To</legend>
+          <label style="display:flex;gap:6px"><input type="checkbox" id="mo-snap"> <span>Automatically move pointer to the default button in a dialog box</span></label>
+        </fieldset>
+        <fieldset class="mo-fs"><legend>Visibility</legend>
+          <label style="display:flex;gap:6px"><input type="checkbox" id="mo-trails"> <span>Display pointer trails</span></label>
+          <div class="aprow" style="margin:2px 0 4px 20px"><span class="small">Short</span><input type="range" id="mo-traillen" min="2" max="7" value="4" style="flex:1" disabled><span class="small">Long</span></div>
+          <label style="display:flex;gap:6px"><input type="checkbox" id="mo-hidetype" checked> <span>Hide pointer while typing</span></label>
+          <label style="display:flex;gap:6px;margin-top:2px"><input type="checkbox" id="mo-ctrl"> <span>Show location of pointer when I press the CTRL key</span></label>
+        </fieldset>
+      </div>
+      <div class="xpane" id="mo-whl">
+        <fieldset class="mo-fs"><legend>Scrolling</legend>
+          <div class="small" style="margin-bottom:6px">Roll the wheel one notch to scroll:</div>
+          <label style="display:flex;gap:6px"><input type="radio" name="mo-wheel" checked> <span>The following number of lines at a time:</span></label>
+          <div style="margin:3px 0 6px 22px"><input type="number" id="mo-lines" min="1" max="100" value="3" style="width:56px"></div>
+          <label style="display:flex;gap:6px"><input type="radio" name="mo-wheel"> <span>One screen at a time</span></label>
+        </fieldset>
+      </div>
+      <div class="xpane" id="mo-hw">
+        <div class="small dim" style="margin-bottom:4px">Devices:</div>
+        <div style="border:1px solid #7F9DB9;background:#fff;padding:4px 6px;display:flex;gap:7px;align-items:center">
+          <i class="xico" data-ico="@ic-dev" style="width:16px;height:16px"></i><span>HID-compliant mouse</span>
+        </div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:8px 2px;font-size:11px">
+          <span class="dim">Manufacturer:</span><span>(Standard mouse types)</span>
+          <span class="dim">Location:</span><span>on PS/2 mouse port</span>
+          <span class="dim">Device Status:</span><span>This device is working properly.</span>
+        </div>
+        <div style="display:flex;gap:5px;justify-content:flex-end">
+          <button class="xbtn" disabled style="min-width:80px">Troubleshoot...</button>
+          <button class="xbtn" id="mo-hwprops" style="min-width:80px">Properties</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:7px;justify-content:flex-end;margin-top:8px">
+        <button class="xbtn" id="mo-ok" style="min-width:74px">OK</button>
+        <button class="xbtn" id="mo-cancel" style="min-width:74px">Cancel</button>
+        <button class="xbtn" id="mo-apply" style="min-width:74px">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Run As dialog: the real radio pair, and only one identity on this machine -->
+  <div class="window fixed" id="win-runas" style="left:calc(50% - 178px);top:calc(50% - 120px);width:356px">
+    <div class="title-bar">
+      <div class="tb-l"><div class="title-bar-text">Run As</div></div>
+      <div class="title-bar-controls"><button aria-label="Close"></button></div>
+    </div>
+    <div class="win-body">
+      <div style="display:flex;gap:11px;padding:6px 2px 10px">
+        <i class="xico" data-ico="user48" style="width:32px;height:32px;flex:none"></i>
+        <div style="line-height:1.5">Which user account do you want to use to run this program?</div>
+      </div>
+      <label style="display:flex;gap:6px;align-items:center;padding:2px 6px"><input type="radio" name="ras" id="ras-cur" checked> <span>Current user (<b id="ras-user">Administrator</b>)</span></label>
+      <label style="display:flex;gap:6px;align-items:center;padding:2px 6px 2px 24px"><input type="checkbox" checked disabled> <span class="dim">Protect my computer and data from unauthorized program activity</span></label>
+      <label style="display:flex;gap:6px;align-items:center;padding:6px 6px 2px"><input type="radio" name="ras" id="ras-other"> <span>The following user:</span></label>
+      <div style="display:grid;grid-template-columns:74px 1fr;gap:5px;align-items:center;padding:2px 6px 8px 24px">
+        <span>User name:</span><input type="text" id="ras-name" disabled value="">
+        <span>Password:</span><input type="password" id="ras-pass" disabled value="">
+      </div>
+      <div style="display:flex;gap:7px;justify-content:flex-end;margin-top:4px">
+        <button class="xbtn" id="ras-ok" style="min-width:74px">OK</button>
+        <button class="xbtn" id="ras-cancel" style="min-width:74px">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Shortcut wizard -->
+  <div class="window fixed" id="win-shortcutwiz" style="left:calc(50% - 210px);top:calc(50% - 140px);width:420px">
+    <div class="title-bar">
+      <div class="tb-l"><div class="title-bar-text">Create Shortcut</div></div>
+      <div class="title-bar-controls"><button aria-label="Close"></button></div>
+    </div>
+    <div class="win-body">
+      <div id="scw-p1">
+        <div style="line-height:1.5;padding:4px 2px 10px">This wizard helps you to create shortcuts to local or network programs, files, folders, computers, or Internet addresses.</div>
+        <div style="padding:0 2px 4px">Type the location of the item:</div>
+        <div style="display:flex;gap:6px;padding:0 2px 10px"><input type="text" id="scw-loc" style="flex:1" spellcheck="false"><button class="xbtn" id="scw-browse" style="min-width:70px">Browse...</button></div>
+        <div class="small dim" style="padding:0 2px 10px">Click Next to continue.</div>
+      </div>
+      <div id="scw-p2" style="display:none">
+        <div style="line-height:1.5;padding:4px 2px 10px">Type a name for this shortcut:</div>
+        <div style="padding:0 2px 14px"><input type="text" id="scw-name" style="width:100%" spellcheck="false"></div>
+        <div class="small dim" style="padding:0 2px 10px">Click Finish to create the shortcut.</div>
+      </div>
+      <div style="display:flex;gap:7px;justify-content:flex-end;border-top:1px solid #D4D0C8;padding-top:8px">
+        <button class="xbtn" id="scw-back" style="min-width:74px" disabled>&lt; Back</button>
+        <button class="xbtn" id="scw-next" style="min-width:74px">Next &gt;</button>
+        <button class="xbtn" id="scw-cancel" style="min-width:74px">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Desktop Cleanup Wizard: sweeps what you never open into a folder -->
+  <div class="window fixed" id="win-cleanup" style="left:calc(50% - 220px);top:calc(50% - 160px);width:440px">
+    <div class="title-bar">
+      <div class="tb-l"><div class="title-bar-text">Desktop Cleanup Wizard</div></div>
+      <div class="title-bar-controls"><button aria-label="Close"></button></div>
+    </div>
+    <div class="win-body">
+      <div id="dcw-p1">
+        <div style="font-weight:bold;font-size:12px;padding:4px 2px 8px">Welcome to the Desktop Cleanup Wizard</div>
+        <div style="line-height:1.55;padding:0 2px 10px">This wizard helps you clean up your desktop by moving unused shortcuts to a folder called Unused Desktop Shortcuts. You can restore shortcuts from the folder to your desktop at any time.</div>
+        <div class="small dim" style="padding:0 2px 10px">To continue, click Next.</div>
+      </div>
+      <div id="dcw-p2" style="display:none">
+        <div style="line-height:1.5;padding:4px 2px 8px">Select the shortcuts you want to move to the Unused Desktop Shortcuts folder, and then click Next.</div>
+        <div style="border:1px solid #7F9DB9;background:#fff;height:150px;overflow:auto;margin:0 2px 8px" id="dcw-list"></div>
+      </div>
+      <div id="dcw-p3" style="display:none">
+        <div style="font-weight:bold;font-size:12px;padding:4px 2px 8px">Completing the Desktop Cleanup Wizard</div>
+        <div style="line-height:1.55;padding:0 2px 6px">You have chosen to move these shortcuts:</div>
+        <div style="border:1px solid #7F9DB9;background:#fff;max-height:120px;overflow:auto;margin:0 2px 8px;padding:4px 6px" id="dcw-sum"></div>
+        <div class="small dim" style="padding:0 2px 10px">To close this wizard, click Finish.</div>
+      </div>
+      <div style="display:flex;gap:7px;justify-content:flex-end;border-top:1px solid #D4D0C8;padding-top:8px">
+        <button class="xbtn" id="dcw-back" style="min-width:74px" disabled>&lt; Back</button>
+        <button class="xbtn" id="dcw-next" style="min-width:74px">Next &gt;</button>
+        <button class="xbtn" id="dcw-cancel" style="min-width:74px">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Confirm dialog -->
   <div class="window fixed" id="win-confirm" style="left:calc(50% - 165px);top:calc(50% - 80px);width:330px">
     <div class="title-bar">
@@ -832,11 +1305,12 @@ icons/sounds: winXP (MIT)</div>
   <div id="ql"><span class="ql-grip"></span><button class="qlb" id="ql-desk" data-tip="Show Desktop"><svg><use href="#ic-desk"/></svg></button><button class="qlb" data-app="win-amp" data-tip="Winamp"><i class="xico" data-ico="amp16"></i></button><button class="qlb" data-app="win-chat" data-tip="Windows Messenger"><i class="xico" data-ico="msn16"></i></button><span class="ql-grip"></span></div>
   <div id="tabs"></div>
   <div id="tray">
+    <span id="tray-chev" data-tip="Show hidden icons">‹</span>
     <span id="phasechip" data-tip="System status">R0 · BOOT</span>
     <i class="xico trayico" id="netico" data-ico="connect16" data-tip="cursor$net · 56.6 Kbps" style="display:none"></i>
     <i class="xico trayico" id="sndico" data-ico="trayVol" data-tip="Volume"></i>
-    <i class="xico trayico" data-ico="trayUsb" data-tip="Safely Remove Hardware: never"></i>
-    <i class="xico trayico" data-ico="trayRisk" data-tip="Your computer might be at risk"></i>
+    <i class="xico trayico tray-idle" data-ico="trayUsb" data-tip="Safely Remove Hardware: never"></i>
+    <i class="xico trayico tray-idle" data-ico="trayRisk" data-tip="Your computer might be at risk"></i>
     <span id="clock" data-tip="@clock">--:--</span>
   </div>
 </div>
@@ -873,6 +1347,7 @@ icons/sounds: winXP (MIT)</div>
     <div class="sm-left">
       <div class="sm-item two" data-app="win-ie"><i class="xico" data-ico="ie32"></i><div class="sm-texts"><div class="sm-text b">Internet</div><div class="sm-sub">Internet Explorer</div></div></div>
       <div class="sm-item two" data-act="email"><i class="xico" data-ico="outlook32"></i><div class="sm-texts"><div class="sm-text b">E-mail</div><div class="sm-sub">Outlook Express</div></div></div>
+      <div id="sm-pinned"></div>
       <div class="sm-sep"></div>
       <!-- XP's left column below the pins is a most-recently-used list, not a
            fixed roster: it rebuilds itself from what you actually open -->
@@ -945,6 +1420,6 @@ icons/sounds: winXP (MIT)</div>
   </div>
   <div class="lg-orange"></div>
   <div class="lg-bot"><button id="lg-off"><img id="lg-offimg" alt="">Turn off computer</button><div class="lg-note">After you log on, you can add or lose funds.</div></div>
-</div>
+</div>
 </body>
 </html>
