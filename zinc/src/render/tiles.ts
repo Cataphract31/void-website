@@ -56,7 +56,33 @@ function rnd(s: number): number {
  */
 const TOP = "#eff8fd";
 const MID = "#d6eaf4";
-const DEEP = "#b7d6e7";
+const DEEP = "#accbe0";
+
+/**
+ * Frost: a tiny deterministic noise tile, patterned over the face at whisper
+ * alpha so the glass has tooth instead of reading as blank plastic. Built
+ * once for the module — bake-time cost only.
+ */
+let frostTile: HTMLCanvasElement | null = null;
+function frost(): HTMLCanvasElement {
+  if (frostTile) return frostTile;
+  const size = 64;
+  const c = document.createElement("canvas");
+  c.width = size;
+  c.height = size;
+  const x = c.getContext("2d")!;
+  const img = x.createImageData(size, size);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const v = 190 + rnd(i * 0.37) * 65;
+    img.data[i] = v;
+    img.data[i + 1] = v + 6;
+    img.data[i + 2] = 255;
+    img.data[i + 3] = rnd(i * 0.91) * 26;
+  }
+  x.putImageData(img, 0, 0);
+  frostTile = c;
+  return c;
+}
 const VEIN = "47, 96, 128";
 const CRACK_CORE = "rgba(252, 254, 255, 0.92)";
 const CRACK_SHADOW = "rgba(43, 80, 105, 0.42)";
@@ -143,19 +169,20 @@ function body(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number):
   hexPath(ctx, cx, cy, r);
   ctx.clip();
 
-  // Subsurface veins: wide, soft, deep — structure INSIDE the ice, which is
-  // what separates glass from plastic. Bake-time blur, so it costs nothing.
-  for (let i = 0; i < 3; i++) {
+  // Subsurface structure: several THIN cool veins plus two bright internal
+  // planes, all soft-blurred — depth inside the ice. The first cut used three
+  // wide smudges and every plate came out wearing one grey wiper streak.
+  ctx.lineCap = "round";
+  for (let i = 0; i < 5; i++) {
     const s = 11 + i * 17;
-    const x0 = cx + (rnd(s) - 0.5) * r * 1.7;
-    const y0 = cy + (rnd(s + 1) - 0.5) * r * 1.7;
-    const x1 = cx + (rnd(s + 2) - 0.5) * r * 1.7;
-    const y1 = cy + (rnd(s + 3) - 0.5) * r * 1.7;
-    ctx.strokeStyle = `rgba(${VEIN}, ${0.1 - i * 0.02})`;
-    ctx.lineWidth = r * (0.16 - i * 0.03);
-    ctx.lineCap = "round";
-    ctx.shadowColor = `rgba(${VEIN}, 0.35)`;
-    ctx.shadowBlur = r * 0.14;
+    const x0 = cx + (rnd(s) - 0.5) * r * 1.8;
+    const y0 = cy + (rnd(s + 1) - 0.5) * r * 1.8;
+    const x1 = cx + (rnd(s + 2) - 0.5) * r * 1.8;
+    const y1 = cy + (rnd(s + 3) - 0.5) * r * 1.8;
+    ctx.strokeStyle = `rgba(${VEIN}, ${0.05 + rnd(s + 6) * 0.03})`;
+    ctx.lineWidth = r * (0.03 + rnd(s + 7) * 0.04);
+    ctx.shadowColor = `rgba(${VEIN}, 0.25)`;
+    ctx.shadowBlur = r * 0.08;
     ctx.beginPath();
     ctx.moveTo(x0, y0);
     ctx.quadraticCurveTo(
@@ -167,6 +194,27 @@ function body(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number):
     ctx.stroke();
   }
   ctx.shadowBlur = 0;
+  // The bright planes: hairline refractions catching the key light.
+  for (let i = 0; i < 2; i++) {
+    const s = 71 + i * 23;
+    const a = Math.PI * (0.6 + rnd(s) * 0.25);
+    const px = cx + (rnd(s + 1) - 0.5) * r * 0.9;
+    const py = cy + (rnd(s + 2) - 0.5) * r * 0.9;
+    const len = r * (0.5 + rnd(s + 3) * 0.5);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+    ctx.lineWidth = Math.max(0.5, r * 0.018);
+    ctx.beginPath();
+    ctx.moveTo(px - Math.cos(a) * len, py - Math.sin(a) * len);
+    ctx.lineTo(px + Math.cos(a) * len, py + Math.sin(a) * len);
+    ctx.stroke();
+  }
+
+  // Frost tooth over the whole face.
+  const pat = ctx.createPattern(frost(), "repeat");
+  if (pat) {
+    ctx.fillStyle = pat;
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+  }
 
   // Frozen bubbles, drifting toward the low side the way they freeze in.
   ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
