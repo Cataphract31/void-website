@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <title>CURSORS.EXE</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-  <script type="module" crossorigin src="./assets/index-BY7Xl8St.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-DaErTpPn.css">
+  <script type="module" crossorigin src="./assets/index-DpMtCZD5.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-z1oBswG5.css">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute">
@@ -31,6 +31,41 @@
       <rect x="4" y="6" width="24" height="17" rx="2" fill="#DCE9FB" stroke="#4A6FA5"/>
       <path d="M8 10 h10 M8 14 h8" stroke="#7FA3CE" stroke-width="1.6"/>
       <path d="M20 24 L26 15 L29 18 L23 27 Z" fill="#F1B802" stroke="#8A6A00"/>
+    </symbol>
+    <symbol id="ic-cmd" viewBox="0 0 32 32">
+      <rect x="2" y="4" width="28" height="24" rx="2" fill="#0A0A0A" stroke="#5A5A5A"/>
+      <rect x="2" y="4" width="28" height="4" rx="2" fill="#3C3C3C"/>
+      <path d="M6 14 l4 3 -4 3" fill="none" stroke="#D8D8D8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M13 21 h7" stroke="#D8D8D8" stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="ic-mmc" viewBox="0 0 32 32">
+      <rect x="3" y="5" width="26" height="22" rx="2" fill="#FDFDFD" stroke="#8A99AD"/>
+      <rect x="3" y="5" width="26" height="4" rx="2" fill="#7C9BC4"/>
+      <rect x="5" y="11" width="8" height="14" fill="#E8EEF6" stroke="#B9C6D6"/>
+      <path d="M15 13 h12 M15 17 h12 M15 21 h9" stroke="#9AA9BB" stroke-width="1.4"/>
+      <circle cx="24" cy="24" r="5" fill="#3C8F3C" stroke="#245E24"/>
+      <path d="M22 21.6 v4.8 l4 -2.4 z" fill="#fff"/>
+    </symbol>
+    <symbol id="ic-dev" viewBox="0 0 32 32">
+      <rect x="7" y="9" width="18" height="14" rx="1.5" fill="#4E6B8F" stroke="#2C405A"/>
+      <rect x="10" y="12" width="12" height="8" fill="#BFD4EC"/>
+      <path d="M3 13 h4 M3 16 h4 M3 19 h4 M25 13 h4 M25 16 h4 M25 19 h4" stroke="#7A7A7A" stroke-width="1.6"/>
+      <path d="M13 23 v3 h6 v-3" fill="none" stroke="#2C405A" stroke-width="1.4"/>
+    </symbol>
+    <symbol id="ic-pol" viewBox="0 0 32 32">
+      <path d="M6 3 h14 l6 6 v20 h-20 z" fill="#FDFDFD" stroke="#8A99AD"/>
+      <path d="M20 3 v6 h6" fill="#E4E9EF" stroke="#8A99AD" stroke-linejoin="round"/>
+      <path d="M10 14 h12 M10 18 h12 M10 22 h8" stroke="#9AA9BB" stroke-width="1.5"/>
+      <circle cx="23" cy="23" r="6" fill="#E8C24A" stroke="#8A6A00"/>
+      <path d="M20.4 23 l1.8 1.9 3.6 -3.9" fill="none" stroke="#4A3800" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="ic-cpl" viewBox="0 0 32 32">
+      <rect x="3" y="6" width="26" height="20" rx="2" fill="#DCE9FB" stroke="#4A6FA5"/>
+      <circle cx="11" cy="13" r="3.4" fill="#fff" stroke="#4A6FA5"/>
+      <path d="M11 10.4 v2.6" stroke="#C33" stroke-width="1.5" stroke-linecap="round"/>
+      <rect x="17" y="10" width="9" height="3" rx="1.4" fill="#fff" stroke="#4A6FA5"/>
+      <rect x="17" y="16" width="9" height="3" rx="1.4" fill="#fff" stroke="#4A6FA5"/>
+      <circle cx="11" cy="20.5" r="2.4" fill="#8FCB6E" stroke="#3E7A2C"/>
     </symbol>
   </defs>
 </svg>
@@ -436,6 +471,60 @@ icons/sounds: winXP (MIT)</div>
   </div>
 
   <!-- Display Properties -->
+
+  <!-- ===== Command Prompt ===== -->
+  <div class="window" id="win-cmd" data-minw="380" data-minh="200" style="left:150px;top:100px;width:604px;height:352px">
+    <div class="title-bar">
+      <div class="tb-l"><i class="xico tb-ico" data-ico="@ic-cmd"></i><div class="title-bar-text">C:\WINDOWS\system32\cmd.exe</div></div>
+      <div class="title-bar-controls"><button aria-label="Minimize"></button><button aria-label="Maximize"></button><button aria-label="Close"></button></div>
+    </div>
+    <div class="win-body cmd-body">
+      <div class="cmd-screen" id="cmd-screen" tabindex="0"></div>
+      <input id="cmd-kbd" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="Command input">
+    </div>
+  </div>
+
+  <!-- ===== Control Panel ===== -->
+  <div class="window" id="win-control" data-minw="480" data-minh="320" style="left:110px;top:64px;width:700px;height:474px">
+    <div class="title-bar">
+      <div class="tb-l"><i class="xico tb-ico" data-ico="@ic-cpl"></i><div class="title-bar-text">Control Panel</div></div>
+      <div class="title-bar-controls"><button aria-label="Minimize"></button><button aria-label="Maximize"></button><button aria-label="Close"></button></div>
+    </div>
+    <div class="win-body cpl-body" id="cpl-body"></div>
+  </div>
+
+  <!-- ===== MMC consoles: Services, Device Manager, Group Policy ===== -->
+  <div class="window" id="win-services" data-minw="520" data-minh="300" style="left:60px;top:64px;width:880px;height:470px">
+    <div class="title-bar">
+      <div class="tb-l"><i class="xico tb-ico" data-ico="@ic-mmc"></i><div class="title-bar-text">Services</div></div>
+      <div class="title-bar-controls"><button aria-label="Minimize"></button><button aria-label="Maximize"></button><button aria-label="Close"></button></div>
+    </div>
+    <div class="win-body mmc-body" data-mmc="services"></div>
+  </div>
+  <div class="window" id="win-devmgr" data-minw="420" data-minh="300" style="left:130px;top:80px;width:600px;height:452px">
+    <div class="title-bar">
+      <div class="tb-l"><i class="xico tb-ico" data-ico="@ic-dev"></i><div class="title-bar-text">Device Manager</div></div>
+      <div class="title-bar-controls"><button aria-label="Minimize"></button><button aria-label="Maximize"></button><button aria-label="Close"></button></div>
+    </div>
+    <div class="win-body mmc-body" data-mmc="devmgr"></div>
+  </div>
+  <div class="window" id="win-gpedit" data-minw="520" data-minh="300" style="left:104px;top:76px;width:770px;height:452px">
+    <div class="title-bar">
+      <div class="tb-l"><i class="xico tb-ico" data-ico="@ic-pol"></i><div class="title-bar-text">Group Policy Object Editor</div></div>
+      <div class="title-bar-controls"><button aria-label="Minimize"></button><button aria-label="Maximize"></button><button aria-label="Close"></button></div>
+    </div>
+    <div class="win-body mmc-body" data-mmc="gpedit"></div>
+  </div>
+
+  <!-- one properties sheet, retitled per console (XP opens one at a time too) -->
+  <div class="window fixed" id="win-mmcprops" style="left:calc(50% - 190px);top:60px;width:380px">
+    <div class="title-bar">
+      <div class="tb-l"><i class="xico tb-ico" data-ico="@ic-mmc"></i><div class="title-bar-text">Properties</div></div>
+      <div class="title-bar-controls"><button aria-label="Close"></button></div>
+    </div>
+    <div class="win-body pad" id="mmcprops-body" style="background:#ECE9D8"></div>
+  </div>
+
   <div class="window fixed" id="win-dispprops" style="left:calc(50% - 190px);top:60px;width:380px">
     <div class="title-bar">
       <div class="tb-l"><i class="xico tb-ico" data-ico="cpanel16"></i><div class="title-bar-text">Display Properties</div></div>
@@ -784,9 +873,10 @@ icons/sounds: winXP (MIT)</div>
       <div class="sm-item" data-app="win-amp"><i class="xico" data-ico="music32"></i><div class="sm-texts"><div class="sm-text b">My Music</div></div></div>
       <div class="sm-item" data-app="win-explorer"><i class="xico" data-ico="computer32"></i><div class="sm-texts"><div class="sm-text b">My Computer</div></div></div>
       <div class="sm-sep"></div>
-      <div class="sm-item" data-app="win-dispprops"><i class="xico" data-ico="cpanel32"></i><div class="sm-texts"><div class="sm-text">Control Panel</div></div></div>
+      <div class="sm-item" data-app="win-control"><i class="xico" data-ico="@ic-cpl"></i><div class="sm-texts"><div class="sm-text">Control Panel</div></div></div>
       <div class="sm-item" data-act="connect"><i class="xico" data-ico="connect32"></i><div class="sm-texts"><div class="sm-text">Connect To</div></div></div>
       <div class="sm-item" data-act="printers"><i class="xico" data-ico="printer32"></i><div class="sm-texts"><div class="sm-text">Printers and Faxes</div></div></div>
+      <div class="sm-item" data-app="win-services"><i class="xico" data-ico="@ic-mmc"></i><div class="sm-texts"><div class="sm-text">Administrative Tools</div></div></div>
       <div class="sm-sep"></div>
       <div class="sm-item" data-app="win-help"><i class="xico" data-ico="help32"></i><div class="sm-texts"><div class="sm-text">Help and Support</div></div></div>
       <div class="sm-item" data-act="search"><i class="xico" data-ico="search32"></i><div class="sm-texts"><div class="sm-text">Search</div></div></div>
