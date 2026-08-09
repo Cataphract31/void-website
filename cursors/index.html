@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <title>CURSORS.EXE</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-  <script type="module" crossorigin src="./assets/index-wvz3FEqm.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-Bk8cEdJc.css">
+  <script type="module" crossorigin src="./assets/index-BY7Xl8St.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-DaErTpPn.css">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute">
@@ -502,12 +502,9 @@ icons/sounds: winXP (MIT)</div>
         </div>
       </div>
       <div class="xpane" id="dt-tz">
-        <select style="width:100%">
-          <option>(GMT-05:00) Desktop Standard Time</option>
-          <option>(GMT+00:00) Greenwich Mean Vibes</option>
-          <option>(GMT+∞) Solana Slot Time</option>
-        </select>
-        <div style="height:92px;background:#9FB4CE;border:1px solid #7F9DB9;display:grid;place-items:center;color:#4A5E78;margin-top:9px">map data went home</div>
+        <select id="tz-sel" style="width:100%"></select>
+        <label class="tz-chk"><input type="checkbox" id="tz-dst" disabled> Automatically adjust clock for daylight saving changes</label>
+        <div class="tz-world" id="tz-world"></div>
       </div>
       <div class="dlg-foot"><button class="xbtn" id="dt-ok">OK</button><button class="xbtn" id="dt-cancel">Cancel</button><button class="xbtn" id="dt-apply">Apply</button></div>
     </div>
@@ -734,11 +731,18 @@ icons/sounds: winXP (MIT)</div>
   <div id="tray">
     <span id="phasechip" data-tip="System status">R0 · BOOT</span>
     <i class="xico trayico" id="netico" data-ico="connect16" data-tip="cursor$net · 56.6 Kbps" style="display:none"></i>
-    <i class="xico trayico" id="sndico" data-ico="trayVol" data-tip="Volume: click to mute"></i>
+    <i class="xico trayico" id="sndico" data-ico="trayVol" data-tip="Volume"></i>
     <i class="xico trayico" data-ico="trayUsb" data-tip="Safely Remove Hardware: never"></i>
     <i class="xico trayico" data-ico="trayRisk" data-tip="Your computer might be at risk"></i>
     <span id="clock" data-tip="@clock">--:--</span>
   </div>
+</div>
+
+<!-- the tray volume flyout: XP's little panel, not a menu -->
+<div id="volflyout">
+  <div class="vf-title">Volume</div>
+  <input id="vf-slider" type="range" min="0" max="100" step="1" value="70" orient="vertical" aria-label="Volume">
+  <label class="vf-mute"><input type="checkbox" id="vf-mute"> Mute</label>
 </div>
 
 <!-- mobile game HUD: the permanent thumb bar (shown by body.mobile only) -->
