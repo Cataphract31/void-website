@@ -703,7 +703,7 @@ if (boot()) {
 }
 
 /* CA fills itself from the same stats.json the fall uses. */
-fetch("stats.json", { cache: "no-store" })
+fetch("/api/stats", { cache: "no-store" })
   .then((r) => (r.ok ? r.json() : null))
   .then((d) => { if (d && d.live && d.mint) document.getElementById("wpca").textContent = d.mint; })
   .catch(() => {});
