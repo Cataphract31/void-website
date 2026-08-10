@@ -595,56 +595,47 @@ export function AutoPanel({
   };
 
   return (
-    <div className="px-2.5 py-2">
-      {/* Auto switching itself off after a long absence is the right call —
-          nobody should be staked in a round they have not seen yet — but done
-          silently it reads as the panel forgetting. One line, and it clears
-          the moment the player touches anything in here. */}
-      {snap.autoLapsed && (
-        <div className="label mb-1.5 text-[var(--color-cyan)]">auto off · you were away</div>
-      )}
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => onChange({ enabled: !on })}
-          className={on ? "label rounded-sm px-2.5 py-1.5" : "chip label px-2.5 py-1.5"}
-          style={
-            on
-              ? { background: "var(--color-cyan)", color: "#03211f", fontWeight: 700 }
-              : undefined
-          }
-        >
-          auto {on ? "on" : "off"}
-        </button>
-        <span className="label ml-auto">exit at</span>
-        <input
-          type="number"
-          min={1.05}
-          step={0.05}
-          value={draft ?? snap.auto.target}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") e.currentTarget.blur();
-          }}
-          aria-label="Auto exit target"
-          className="tnum w-[64px] rounded-sm bg-[var(--color-panel2)] px-1.5 py-1 text-right text-[13px] font-semibold text-[var(--color-text)] outline-none focus:ring-1 focus:ring-[var(--color-cyan)]"
-        />
-        <span className="label">×</span>
-        {/* How many plates each auto round buys. A select, not a stepper: five
-            discrete values, and the whole range must be visible in one tap. */}
-        <select
-          value={snap.auto.plates}
-          onChange={(e) => onChange({ plates: Number(e.target.value) })}
-          aria-label="Auto plate count"
-          className="tnum rounded-sm bg-[var(--color-panel2)] px-1 py-1 text-[13px] font-semibold text-[var(--color-text)] outline-none focus:ring-1 focus:ring-[var(--color-cyan)]"
-        >
-          {Array.from({ length: Math.max(1, snap.you.plates.max || 5) }, (_, i) => (
-            <option key={i + 1} value={i + 1}>
-              ×{i + 1}
-            </option>
-          ))}
-        </select>
-      </div>
+    <div className="flex items-center gap-2 px-2.5 py-2">
+      <button
+        onClick={() => onChange({ enabled: !on })}
+        className={on ? "label rounded-sm px-2.5 py-1.5" : "chip label px-2.5 py-1.5"}
+        style={
+          on
+            ? { background: "var(--color-cyan)", color: "#03211f", fontWeight: 700 }
+            : undefined
+        }
+      >
+        auto {on ? "on" : "off"}
+      </button>
+      <span className="label ml-auto">exit at</span>
+      <input
+        type="number"
+        min={1.05}
+        step={0.05}
+        value={draft ?? snap.auto.target}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+        }}
+        aria-label="Auto exit target"
+        className="tnum w-[64px] rounded-sm bg-[var(--color-panel2)] px-1.5 py-1 text-right text-[13px] font-semibold text-[var(--color-text)] outline-none focus:ring-1 focus:ring-[var(--color-cyan)]"
+      />
+      <span className="label">×</span>
+      {/* How many plates each auto round buys. A select, not a stepper: five
+          discrete values, and the whole range must be visible in one tap. */}
+      <select
+        value={snap.auto.plates}
+        onChange={(e) => onChange({ plates: Number(e.target.value) })}
+        aria-label="Auto plate count"
+        className="tnum rounded-sm bg-[var(--color-panel2)] px-1 py-1 text-[13px] font-semibold text-[var(--color-text)] outline-none focus:ring-1 focus:ring-[var(--color-cyan)]"
+      >
+        {Array.from({ length: Math.max(1, snap.you.plates.max || 5) }, (_, i) => (
+          <option key={i + 1} value={i + 1}>
+            ×{i + 1}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
