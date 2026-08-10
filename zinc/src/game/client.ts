@@ -239,6 +239,9 @@ export interface Snapshot {
   /** Rakeback that streamed in while the tab was closed. One-shot recap,
       shown as a welcome-back card; null or absent when there is nothing. */
   away?: { ms: number; sol: number } | null;
+  /** Auto play was switched off because you had been away too long. Sticks
+      until you touch the auto controls, so the panel can explain itself. */
+  autoLapsed?: boolean;
   /** Recent jackpot hits, newest first, for the bonanza history popover. */
   bonanzaFires?: { round: number; name: string; charId: string; sol: number; at: number }[];
 }
@@ -308,6 +311,9 @@ export function commitPreimage(roundId: number, seedHex: string, rulesHash: stri
 }
 
 const SAVE_KEY = "zinc.save.v1";
+
+/** How long away before auto play lapses. Mirrors the server's default. */
+const AUTO_LAPSE_MS = 10 * 60_000;
 
 interface SaveState {
   wallet: number;
@@ -624,6 +630,9 @@ export class GameClient {
   charId: string = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)]!.id;
   private charMap = new Map<number, string>();
   auto: AutoSettings = { enabled: false, target: 2, plates: 1 };
+  /** Set when the restore above switched auto off; cleared the moment the
+      player touches the controls, which is their acknowledgement. */
+  private autoLapsed = false;
 
   private listeners = new Set<(s: Snapshot) => void>();
 
@@ -649,7 +658,13 @@ export class GameClient {
       if (typeof save.autoTarget === "number" && save.autoTarget >= 1.05) {
         this.auto.target = save.autoTarget;
       }
-      this.auto.enabled = save.autoEnabled === true;
+      // Auto play lapses over a long absence — see CONFIG.autoLapseMs on the
+      // server, which owns this rule in real play. Coming back to find
+      // yourself already staked in a round you never chose to enter is the
+      // one thing auto must never do.
+      const gone = typeof save.at === "number" ? Date.now() - save.at : 0;
+      this.auto.enabled = save.autoEnabled === true && gone <= AUTO_LAPSE_MS;
+      this.autoLapsed = save.autoEnabled === true && !this.auto.enabled;
       this.auto.plates = Math.min(MAX_PLATES, Math.max(1, Math.round(num(save.autoPlates, 1))));
       // charById falls back to the default character on any unknown slug.
       if (save.charId) this.charId = charById(save.charId).id;
@@ -1365,6 +1380,7 @@ export class GameClient {
   }
 
   setAuto(patch: Partial<AutoSettings>): void {
+    this.autoLapsed = false;
     this.auto = { ...this.auto, ...patch };
     if (!Number.isFinite(this.auto.target) || this.auto.target < 1.05) {
       this.auto.target = 1.05;
@@ -1642,6 +1658,7 @@ export class GameClient {
       online: 1,
       connected: true,
       away: this.awayRecap,
+      autoLapsed: this.autoLapsed,
       bonanzaFires: this.fireLog,
     };
   }

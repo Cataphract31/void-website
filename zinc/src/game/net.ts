@@ -237,6 +237,10 @@ export class NetClient {
   private signatureWanted = false;
   /** Local deadline for the current phase, so countdowns run between pushes. */
   private phaseEndAt = 0;
+  /** The server switched auto off over a long absence. Held here rather than
+      read off the state push — the push carries the settings, not the reason
+      they changed — and cleared as soon as the player touches the controls. */
+  private autoLapsed = false;
   private clock: number | null = null;
   /** Set once the server names its house account; enables the bank panel. */
   private bank: BankState | null = null;
@@ -363,6 +367,7 @@ export class NetClient {
             ? { away: { ms: Number(m.awayMs ?? 0), sol: Number(m.awayRakeback) } }
             : {}),
         };
+        this.autoLapsed = m.autoLapsed === true;
         // A fresh signature minted a session token: store it, and every
         // later connection resumes silently instead of prompting Phantom.
         if (typeof m.token === "string" && m.token) {
@@ -379,6 +384,7 @@ export class NetClient {
           // disagree (expired session seats a guest while Phantom still
           // shows the address), and the seat is the one that holds money.
           seat: { guest: Boolean(m.guest), address: String(m.wallet) },
+          autoLapsed: this.autoLapsed,
         };
         this.emit();
         return;
@@ -404,6 +410,9 @@ export class NetClient {
             ? { guest: this.extras.guest, address: this.extras.address }
             : undefined,
           away: this.extras.away,
+          // Spreading IDLE over every push wipes anything the server does not
+          // send, and the lapse notice is client-held. Carry it explicitly.
+          autoLapsed: this.autoLapsed,
         };
         this.cue(prev, this.snap);
         this.emit();
@@ -739,6 +748,7 @@ export class NetClient {
   }
 
   setAuto(patch: Partial<AutoSettings>): void {
+    this.autoLapsed = false;
     const next = { ...this.snap.auto, ...patch };
     if (!Number.isFinite(next.target) || next.target < 1.05) next.target = 1.05;
     if (next.target > 1000) next.target = 1000;
@@ -748,7 +758,7 @@ export class NetClient {
       : 1;
     // Optimistic locally so the control answers instantly; the server's next
     // state message is what actually settles it.
-    this.snap = { ...this.snap, auto: next };
+    this.snap = { ...this.snap, auto: next, autoLapsed: false };
     this.emit();
     this.send({ t: "setAuto", enabled: next.enabled, target: next.target, plates: next.plates });
   }
